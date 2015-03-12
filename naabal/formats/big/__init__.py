@@ -66,6 +66,12 @@ class BigFile(object):
     def __iter__(self):
         return self
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, tb):
+        self.close()
+
     def close(self):
         handle = self._handle
         self._handle = None

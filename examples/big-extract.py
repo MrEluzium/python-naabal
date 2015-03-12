@@ -57,17 +57,16 @@ if __name__ == '__main__':
     else:
         should_extract = lambda fn: True
 
-    bigfile = FORMAT_IDX[args.format](args.filename)
-    for entry in bigfile:
-        filename = bigfile.get_filename(entry)
-        full_filename = os.path.join(args.destination, filename)
-        if should_extract(filename):
-            try:
-                os.makedirs(os.path.dirname(full_filename))
-            except os.error:
-                # leaf dir already exists (probably)
-                pass
-            with open(full_filename, 'w') as data_file:
-                data_file.write(bigfile.get_data(entry))
-            print 'Extracted file: %s' % filename
-    bigfile.close()
+    with FORMAT_IDX[args.format](args.filename) as bigfile:
+        for entry in bigfile:
+            filename = bigfile.get_filename(entry)
+            full_filename = os.path.join(args.destination, filename)
+            if should_extract(filename):
+                try:
+                    os.makedirs(os.path.dirname(full_filename))
+                except os.error:
+                    # leaf dir already exists (probably)
+                    pass
+                with open(full_filename, 'w') as data_file:
+                    data_file.write(bigfile.get_data(entry))
+                print 'Extracted file: %s' % filename
