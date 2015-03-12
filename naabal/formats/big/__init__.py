@@ -163,5 +163,7 @@ class BigSection(object):
                     struct_member['read'](unpacked_data[idx:idx+struct_member['len']])
             idx += struct_member['len']
 
+        self.check()
+
     def check(self):
         return True
