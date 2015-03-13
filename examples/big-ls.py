@@ -47,9 +47,5 @@ if __name__ == '__main__':
     parser.add_argument('filename')
     args = parser.parse_args()
     with FORMAT_IDX[args.format](args.filename) as bigfile:
-        for entry in bigfile:
-            print '{name_crc_start:0>8X}:{name_crc_end:0>8X} {state} {data_stored_size:>8} {data_real_size:>8} {timestamp} {filename}'.format(
-                filename=bigfile.get_filename(entry), state='c' if entry['data_compressed_flag'] else 'F',
-                name_crc_start=entry['name_crc_start'], name_crc_end=entry['name_crc_end'],
-                data_real_size=entry['data_real_size'], data_stored_size=entry['data_stored_size'],
-                timestamp=str(entry['timestamp']))
+        for filename, entry in bigfile.walk_entries():
+            print filename
