@@ -22,6 +22,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import zlib
+
+
 class classproperty(property):
     def __get__(self, cls, owner):
         return self.fget.__get__(None, owner)()
+
+
+def split_by(iterable, chunk_size):
+    return (iterable[pos:pos+chunk_size] for pos in xrange(0, len(iterable), chunk_size))
+
+def crc32(data):
+    return zlib.crc32(data) & 0xFFFFFFFF

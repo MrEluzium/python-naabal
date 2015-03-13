@@ -28,7 +28,8 @@ import os.path
 
 from naabal.errors import BigFormatException
 from naabal.util.lzss import LZSSDecompressor
-from naabal.formats.big import BigFile, BigSection
+from naabal.formats import StructuredFileSequence
+from naabal.formats.big import BigFile, BigSection, BigSequence
 
 
 class HomeworldBigHeader(BigSection):
@@ -127,7 +128,7 @@ class HomeworldBigTocEntry(BigSection):
             'write':    int,
         },
         {   # flag for if the entry data is compressed, should match data_stored_size < data_real_size
-            'key':      'data_compressed_flag',
+            'key':      'compression_flag',
             'fmt':      'B',
             'len':      1,
             'default':  False,
@@ -156,31 +157,28 @@ class HomeworldBigTocEntry(BigSection):
                 (self['data_stored_size'] - self['data_real_size']))
         if self['timestamp'] > datetime.datetime.now():
             raise BigFormatException('Invalid timestamp: %s' % self['timestamp'])
-        if self['data_compressed_flag'] is not (self['data_stored_size'] < self['data_real_size']):
+        if self['compression_flag'] is not (self['data_stored_size'] < self['data_real_size']):
             raise BigFormatException('Data compression flag does not match data sizes')
         return True
 
+class HomeworldBigToc(BigSequence):
+    CHILD_TYPE      = HomeworldBigTocEntry
+
 class HomeworldBigFile(BigFile):
+    STRUCTURE       = [
+        ('header',              HomeworldBigHeader),
+        ('table_of_contents',   HomeworldBigToc),
+    ]
+
     MIN_COMPRESSION_RATIO       = 0.950
-
-    HEADER_CLASS    = HomeworldBigHeader
-    TOC_ENTRY_CLASS = HomeworldBigTocEntry
-
-    header          = None
-    toc_entries     = []
-
-    _lzss           = LZSSDecompressor()
-
-    def __init__(self, filename, mode='r'):
-        super(HomeworldBigFile, self).__init__(filename, mode)
-        self.header = self.HEADER_CLASS()
-        self.header.populate(self._handle.read(self.header.data_size))
-
-        self.toc_entries = [self.TOC_ENTRY_CLASS(self._handle.read(self.TOC_ENTRY_CLASS.data_size)) \
-            for i in xrange(self.header['toc_entry_count'])]
+    COMPRESSION_ALGORITHM       = LZSSDecompressor()
 
     def __iter__(self):
-        return (entry for entry in self.toc_entries)
+        return (entry for entry in self._data['table_of_contents'])
+
+    def walk_entries(self):
+        for entry in self:
+            yield self.get_filename(entry), entry
 
     def get_filename(self, toc_entry):
         self._handle.seek(toc_entry['entry_offset'])
@@ -192,8 +190,8 @@ class HomeworldBigFile(BigFile):
     def get_data(self, toc_entry):
         self._handle.seek(toc_entry['entry_offset'] + toc_entry['name_length'] + 1)
         file_data = self._handle.read(toc_entry['data_stored_size'])
-        if toc_entry['data_compressed_flag']:
-            return self._lzss.decompress(file_data)
+        if toc_entry['compression_flag']:
+            return self.COMPRESSION_ALGORITHM.decompress(file_data)
         else:
             return file_data
 
@@ -204,3 +202,8 @@ class HomeworldBigFile(BigFile):
             char_mask = char_mask ^ ord(char)
             decrypted_chars.append(chr(char_mask))
         return ''.join(decrypted_chars)
+
+    def _get_sequence_length(self, key):
+        return {
+            'table_of_contents':    lambda: self._data['header']['toc_entry_count'],
+        }.get(key)()

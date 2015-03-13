@@ -23,4 +23,7 @@
 # SOFTWARE.
 
 class NaabalException(Exception): pass
-class BigFormatException(IOError): pass
+
+class StructuredFileFormatException(NaabalException): pass
+
+class BigFormatException(StructuredFileFormatException): pass

@@ -23,7 +23,15 @@
 # SOFTWARE.
 
 
-from naabal.formats.big import BigSection, BigFile
+import os.path
+import zlib
+
+from naabal.formats.big import BigSection, BigFile, BigSequence
+from naabal.util import crc32
+
+
+MAX_FILENAME_LENGTH             = 256
+
 
 class Homeworld2BigArchiveHeader(BigSection):
     STRUCTURE = [
@@ -156,7 +164,7 @@ class Homeworld2BigSectionHeader(BigSection):
 class Homeworld2BigTocEntry(BigSection):
     STRUCTURE = [
         {
-            'key':      'alias_name',
+            'key':      'namespace',
             'fmt':      '64s',
             'len':      1,
             'default':  '',
@@ -164,7 +172,7 @@ class Homeworld2BigTocEntry(BigSection):
             'write':    str,
         },
         {
-            'key':      'name',
+            'key':      'filename',
             'fmt':      '64s',
             'len':      1,
             'default':  '',
@@ -188,7 +196,7 @@ class Homeworld2BigTocEntry(BigSection):
             'write':    int,
         },
         {
-            'key':      'first_filename_idx',
+            'key':      'first_fileinfo_idx',
             'fmt':      'H',
             'len':      1,
             'default':  0x00,
@@ -196,7 +204,7 @@ class Homeworld2BigTocEntry(BigSection):
             'write':    int,
         },
         {
-            'key':      'last_filename_idx',
+            'key':      'last_fileinfo_idx',
             'fmt':      'H',
             'len':      1,
             'default':  0x00,
@@ -212,6 +220,9 @@ class Homeworld2BigTocEntry(BigSection):
             'write':    int,
         },
     ]
+
+class Homeworld2BigToc(BigSequence):
+    CHILD_TYPE      = Homeworld2BigTocEntry
 
 class Homeworld2BigFolderEntry(BigSection):
     STRUCTURE = [
@@ -240,7 +251,7 @@ class Homeworld2BigFolderEntry(BigSection):
             'write':    int,
         },
         {
-            'key':      'first_filename_idx',
+            'key':      'first_fileinfo_idx',
             'fmt':      'H',
             'len':      1,
             'default':  0x00,
@@ -248,7 +259,7 @@ class Homeworld2BigFolderEntry(BigSection):
             'write':    int,
         },
         {
-            'key':      'last_filename_idx',
+            'key':      'last_fileinfo_idx',
             'fmt':      'H',
             'len':      1,
             'default':  0x00,
@@ -256,6 +267,9 @@ class Homeworld2BigFolderEntry(BigSection):
             'write':    int,
         },
     ]
+
+class Homeworld2BigFolderList(BigSequence):
+    CHILD_TYPE      = Homeworld2BigFolderEntry
 
 class Homeworld2BigFileInfoEntry(BigSection):
     STRUCTURE = [
@@ -301,11 +315,14 @@ class Homeworld2BigFileInfoEntry(BigSection):
         },
     ]
 
+class Homeworld2BigFileInfoList(BigSequence):
+    CHILD_TYPE      = Homeworld2BigFileInfoEntry
+
 class Homeworld2BigFileEntry(BigSection):
     STRUCTURE = [
         {
             'key':      'filename',
-            'fmt':      '256s',
+            'fmt':      str(MAX_FILENAME_LENGTH)+'s',
             'len':      1,
             'default':  '',
             'read':     str,
@@ -320,7 +337,7 @@ class Homeworld2BigFileEntry(BigSection):
             'write':    int,
         },
         {
-            'key':      'crc',
+            'key':      'crc32',
             'fmt':      'L',
             'len':      1,
             'default':  0x00,
@@ -329,30 +346,78 @@ class Homeworld2BigFileEntry(BigSection):
         },
     ]
 
+class Homworld2BigFileEntryList(BigSequence):
+    CHILD_TYPE      = Homeworld2BigFileEntry
+
+class Homeworld2BigObject(object):
+    def __init__(self):
+        pass
+
 class Homeworld2BigFile(BigFile):
-    ARCHIVE_HEADER_CLASS    = Homeworld2BigArchiveHeader
-    SECTION_HEADER_CLASS    = Homeworld2BigSectionHeader
-    TOC_ENTRY_CLASS         = Homeworld2BigTocEntry
-    FOLDER_ENTRY_CLASS      = Homeworld2BigFolderEntry
-    FILE_INFO_ENTRY_CLASS   = Homeworld2BigFileInfoEntry
-    FILE_ENTRY_CLASS        = Homeworld2BigFileEntry
+    STRUCTURE           = [
+        ('archive_header',          Homeworld2BigArchiveHeader),
+        ('section_header',          Homeworld2BigSectionHeader),
+        ('table_of_contents',       Homeworld2BigToc),
+        ('folders',                 Homeworld2BigFolderList),
+        ('file_info',               Homeworld2BigFileInfoList),
+    ]
 
-    header              = None
-    sections            = None
-    toc_entries         = []
-    folder_entries      = []
-    file_info_entries   = []
-    file_entries        = []
+    def __iter__(self):
+        return self.walk_entries()
+        return (entry for entry in self._data['file_info'])
 
-    def __init__(self, filename, mode='r'):
-        super(Homeworld2BigFile, self).__init__(filename, mode)
-        self.header = self.ARCHIVE_HEADER_CLASS()
-        self.header.populate(self._handle.read(self.header.data_size))
-        self.sections = self.SECTION_HEADER_CLASS()
-        self.sections.populate(self._handle.read(self.sections.data_size))
-        self.toc_entries = [self.TOC_ENTRY_CLASS(self._handle.read(self.TOC_ENTRY_CLASS.data_size)) \
-            for i in xrange(self.sections['toc_list_count'])]
-        self.folder_entries = [self.FOLDER_ENTRY_CLASS(self._handle.read(self.FOLDER_ENTRY_CLASS.data_size)) \
-            for i in xrange(self.sections['folder_list_count'])]
-        self.file_info_entries = [self.FILE_INFO_ENTRY_CLASS(self._handle.read(self.FILE_INFO_ENTRY_CLASS.data_size)) \
-            for i in xrange(self.sections['file_info_list_count'])]
+    def get_filename(self, file_info_entry):
+        self._handle.seek(self._get_filename_offset(file_info_entry))
+        filename = self._handle.read(MAX_FILENAME_LENGTH).split('\x00', 1)[0]
+        filename = os.path.join(*filename.split('\\'))
+        return filename
+
+    def get_data(self, file_info_entry):
+        file_metadata = self._get_file_metadata(file_info_entry)
+        self._handle.seek(self._get_file_data_offset(file_info_entry))
+        data = self._handle.read(file_info_entry['data_stored_size'])
+        if file_info_entry['compression_flag']:
+            data = zlib.decompress(data)
+        if file_metadata['crc32'] != crc32(data):
+            raise Exception('CRC32 mismatch')
+        return data
+
+    def walk_entries(self):
+        for toc_entry in self._data['table_of_contents']:
+            for item_path, item in self._walk_folder(self._data['folders'][toc_entry['start_folder_idx']]):
+                yield os.path.join(toc_entry['filename'], item_path), item
+
+    def _walk_folder(self, folder_entry):
+        folder_name = self.get_filename(folder_entry) or ''
+        if folder_entry['first_subfolder_idx'] != folder_entry['last_subfolder_idx']:
+            for subfolder in self._data['folders'][folder_entry['first_subfolder_idx']:folder_entry['last_subfolder_idx']]:
+                for item_path, item in self._walk_folder(subfolder):
+                    yield item_path, item
+        for file_info in self._data['file_info'][folder_entry['first_fileinfo_idx']:folder_entry['last_fileinfo_idx']]:
+            yield os.path.join(folder_name, self.get_filename(file_info)), file_info
+
+    def _get_sequence_length(self, key):
+        return {
+            'table_of_contents':    lambda: self._data['section_header']['toc_list_count'],
+            'folders':              lambda: self._data['section_header']['folder_list_count'],
+            'file_info':            lambda: self._data['section_header']['file_info_list_count'],
+            'filenames':            lambda: self._data['section_header']['filename_list_count'],
+        }.get(key)()
+
+    def _get_file_data_offset(self, file_info_entry):
+        return self._data['archive_header']['file_data_offset'] + file_info_entry['file_data_offset']
+
+    def _get_filename_offset(self, entry):
+        return Homeworld2BigArchiveHeader.data_size + \
+            self._data['section_header']['filename_list_offset'] + \
+            entry['filename_offset']
+
+    def _get_file_metadata(self, file_info_entry):
+        self._handle.seek(self._get_file_data_offset(file_info_entry) - Homeworld2BigFileEntry.data_size)
+        file_metadata = Homeworld2BigFileEntry()
+        file_metadata.populate(self._handle.read(file_metadata.data_size))
+        return file_metadata
+
+    def _reverse_filename(self, file_info_entry):
+        file_info_idx = self._data['file_info'].index(file_info_entry)
+        toc_entry_idx = [toc_entry]
