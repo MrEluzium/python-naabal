@@ -27,6 +27,7 @@ import struct
 import os
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
+from naabal.util import ROTL, SPLIT_TO_BYTES, CAST_TO_CHAR
 from naabal.errors import GearboxEncryptionException
 
 
@@ -37,7 +38,7 @@ class BigSequence(StructuredFileSequence): pass
 class GearboxEncryptedBigFile(BigFile):
     MASTER_KEY                  = None
     ENCRYPTION_KEY_MARKER       = 0x00000000
-    ENCRYPTION_KEY_MAX_SIZE     = 1024
+    ENCRYPTION_KEY_MAX_SIZE     = 1024 # 0x0400
 
     _encrypted_data_size        = None
     _encryption_key             = None
@@ -56,7 +57,7 @@ class GearboxEncryptedBigFile(BigFile):
                 # we're gonna read encrypted data
                 if size is None:
                     # make sure we don't read past the encrypted data
-                    size = cur_pos - self._encrypted_data_size
+                    size = self._encrypted_data_size - cur_pos
                 else:
                     if cur_pos + size > self._encrypted_data_size:
                         raise IOError('Attempted to read past end of encryption')
@@ -66,12 +67,12 @@ class GearboxEncryptedBigFile(BigFile):
 
     def _read_encrypted(self, size):
         key_size = len(self._encryption_key)
-        key_offset = self.tell() % key_size
-        encrypted_data = self._handle.read(size)
-        decrypted_data = ''.join(chr(self._encryption_key[(key_offset + i) % key_size]) \
+        key_offset = self.tell()
+        encrypted_data = bytearray(self._handle.read(size))
+        decrypted_data = ''.join(chr(CAST_TO_CHAR(c + self._encryption_key[(key_offset + i) % key_size])) \
             for i, c in zip(range(len(encrypted_data)), encrypted_data))
         if decrypted_data[:8] != '_ARCHIVE':
-            raise Exception('Decryption failed: %s -> %s' % (encrypted_data[:8], decrypted_data[:8]))
+            raise Exception('Decryption failed: %r -> %r' % (encrypted_data[:8], decrypted_data[:8]))
         return decrypted_data
 
     def _load_encryption_key(self):
@@ -99,20 +100,13 @@ class GearboxEncryptedBigFile(BigFile):
             raise GearboxEncryptionException('Invalid marker offset: %d', marker_offset)
 
     def _combine_keys(self, local_key, global_key):
-        ROTL = lambda val, bits: ((val << bits) | (val >> (32 - bits)))
         key_size = len(local_key)
         combined_key = bytearray('\x00' * key_size)
         for i in xrange(0, key_size, 4):
             c = local_key[i/4]
             for b in range(4):
-                val = ROTL(c + self._encrypted_data_size, 8)
-                bytes = (
-                    val & 0x000000FF,
-                    (val & 0x0000FF00) >> 8,
-                    (val & 0x00FF0000) >> 16,
-                    (val & 0xFF000000) >> 24,
-                )
+                bytes = SPLIT_TO_BYTES(ROTL(c + self._encrypted_data_size, 8))
                 for j in range(4):
-                    c = global_key[(c ^ bytes[j]) & 0xFF] ^ (c >> 8)
-                combined_key[i + b] = c & 0xFF
+                    c = global_key[CAST_TO_CHAR(c ^ bytes[j])] ^ (c >> 8)
+                combined_key[i + b] = CAST_TO_CHAR(c)
         return combined_key

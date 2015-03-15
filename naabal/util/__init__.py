@@ -35,3 +35,10 @@ def split_by(iterable, chunk_size):
 
 def crc32(data):
     return zlib.crc32(data) & 0xFFFFFFFF
+
+ROTL = lambda uint32, bits: ((uint32 << bits) | (uint32 >> (32 - bits)))
+
+SPLIT_TO_BYTES = lambda uint32: bytearray((uint32 & (0xFF << s)) >> s \
+    for s in range(0, 32, 8))
+
+CAST_TO_CHAR = lambda uint32: uint32 & 0xFF
