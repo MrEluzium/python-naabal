@@ -24,6 +24,7 @@
 
 
 import struct
+import os
 
 from naabal.util import classproperty, split_by
 from naabal.errors import StructuredFileFormatException
@@ -104,13 +105,14 @@ class StructuredFile(object):
     def next(self):
         raise StopIteration()
 
-    def read(self, size): pass
-    def readline(self, size): pass
-    def readlines(self, sizehint): pass
-    def xreadlines(self): pass
+    def read(self, size=None):
+        return self._handle.read(size)
 
-    def seek(self, offset, whence): pass
-    def tell(self): pass
+    def seek(self, offset, whence=os.SEEK_SET):
+        return self._handle.seek(offset, whence)
+
+    def tell(self):
+        return self._handle.tell()
 
     def truncate(self, size=None): pass
 
@@ -118,12 +120,13 @@ class StructuredFile(object):
     def writelines(self, seq): pass
 
     def populate(self):
-        for idx, (key, member) in zip(xrange(len(self.STRUCTURE)), self.STRUCTURE):
-            if issubclass(member, StructuredFileSequence):
-                self._data[key] = member(self._handle.read(
-                    self._get_sequence_length(key) * member.CHILD_TYPE.data_size))
+        self.seek(0)
+        for idx, (key, member_type) in zip(xrange(len(self.STRUCTURE)), self.STRUCTURE):
+            if issubclass(member_type, StructuredFileSequence):
+                self._data[key] = member_type(self.read(
+                    self._get_sequence_length(key) * member_type.CHILD_TYPE.data_size))
             else:
-                self._data[key] = member(self._handle.read(member.data_size))
+                self._data[key] = member_type(self.read(member_type.data_size))
         self.check()
 
     def check(self):

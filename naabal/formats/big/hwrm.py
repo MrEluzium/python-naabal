@@ -25,8 +25,10 @@
 
 import datetime
 
+from naabal.formats.big import GearboxEncryptedBigFile
 from naabal.formats.big.hw1 import HomeworldBigHeader, HomeworldBigTocEntry, HomeworldBigFile
 from naabal.formats.big.hw2 import Homeworld2BigFile
+from naabal.formats.big.keys import GEARBOX_HOMEWORLD_REMASTERED_KEY
 
 
 class HomeworldClassicBigHeader(HomeworldBigHeader): pass
@@ -121,5 +123,6 @@ class HomeworldClassicBigFile(HomeworldBigFile):
 
 class Homeworld2ClassicBigFile(Homeworld2BigFile): pass
 
-class HomeworldRemasteredBigFile(Homeworld2BigFile):
-    pass
+class HomeworldRemasteredBigFile(GearboxEncryptedBigFile, Homeworld2BigFile):
+    MASTER_KEY                      = GEARBOX_HOMEWORLD_REMASTERED_KEY
+    ENCRYPTION_KEY_MARKER           = 0xDEADBE7A

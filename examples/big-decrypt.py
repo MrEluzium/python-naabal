@@ -1,3 +1,4 @@
+#/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
@@ -22,9 +23,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-class NaabalException(Exception): pass
 
-class StructuredFileFormatException(NaabalException): pass
+from naabal.formats.big.hwrm import HomeworldRemasteredBigFile
 
-class BigFormatException(StructuredFileFormatException): pass
-class GearboxEncryptionException(BigFormatException): pass
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(prog='big-decrypt.py',
+        description='Extract contents of a .big file to a directory')
+    parser.add_argument('-c', '--chunk-size', type=int, default=1024 * 4)
+    parser.add_argument('src_filename')
+    parser.add_argument('dest_filename')
+    args = parser.parse_args()
+
+    with HomeworldRemasteredBigFile(args.src_filename) as infile:
+        with open(args.dest_filename, 'w') as outfile:
+            chunk_size = args.chunk_size
+            data_size = infile._encrypted_data_size
+            for i in xrange(0, data_size, chunk_size):
+                outfile.write(infile.read(chunk_size))

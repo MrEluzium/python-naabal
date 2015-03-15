@@ -367,15 +367,15 @@ class Homeworld2BigFile(BigFile):
         return (entry for entry in self._data['file_info'])
 
     def get_filename(self, file_info_entry):
-        self._handle.seek(self._get_filename_offset(file_info_entry))
-        filename = self._handle.read(MAX_FILENAME_LENGTH).split('\x00', 1)[0]
+        self.seek(self._get_filename_offset(file_info_entry))
+        filename = self.read(MAX_FILENAME_LENGTH).split('\x00', 1)[0]
         filename = os.path.join(*filename.split('\\'))
         return filename
 
     def get_data(self, file_info_entry):
         file_metadata = self._get_file_metadata(file_info_entry)
-        self._handle.seek(self._get_file_data_offset(file_info_entry))
-        data = self._handle.read(file_info_entry['data_stored_size'])
+        self.seek(self._get_file_data_offset(file_info_entry))
+        data = self.read(file_info_entry['data_stored_size'])
         if file_info_entry['compression_flag']:
             data = zlib.decompress(data)
         if file_metadata['crc32'] != crc32(data):
@@ -413,9 +413,9 @@ class Homeworld2BigFile(BigFile):
             entry['filename_offset']
 
     def _get_file_metadata(self, file_info_entry):
-        self._handle.seek(self._get_file_data_offset(file_info_entry) - Homeworld2BigFileEntry.data_size)
+        self.seek(self._get_file_data_offset(file_info_entry) - Homeworld2BigFileEntry.data_size)
         file_metadata = Homeworld2BigFileEntry()
-        file_metadata.populate(self._handle.read(file_metadata.data_size))
+        file_metadata.populate(self.read(file_metadata.data_size))
         return file_metadata
 
     def _reverse_filename(self, file_info_entry):

@@ -181,15 +181,15 @@ class HomeworldBigFile(BigFile):
             yield self.get_filename(entry), entry
 
     def get_filename(self, toc_entry):
-        self._handle.seek(toc_entry['entry_offset'])
-        filename = self._handle.read(toc_entry['name_length'] + 1)[:-1] # skip the null byte
+        self.seek(toc_entry['entry_offset'])
+        filename = self.read(toc_entry['name_length'] + 1)[:-1] # skip the null byte
         filename = self._decrypt_filename(filename)
         filename = os.path.join(*filename.split('\\'))
         return filename
 
     def get_data(self, toc_entry):
-        self._handle.seek(toc_entry['entry_offset'] + toc_entry['name_length'] + 1)
-        file_data = self._handle.read(toc_entry['data_stored_size'])
+        self.seek(toc_entry['entry_offset'] + toc_entry['name_length'] + 1)
+        file_data = self.read(toc_entry['data_stored_size'])
         if toc_entry['compression_flag']:
             return self.COMPRESSION_ALGORITHM.decompress(file_data)
         else:
