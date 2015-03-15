@@ -33,6 +33,7 @@ from naabal.formats.big.hwrm import \
 FORMAT_IDX = {
     'hw1':      HomeworldBigFile,
     'hw1c':     HomeworldClassicBigFile,
+    'cata':     CataclysmBigFile,
     'hw2':      Homeworld2BigFile,
     'hw2c':     Homeworld2ClassicBigFile,
     'hwrm':     HomeworldRemasteredBigFile,
