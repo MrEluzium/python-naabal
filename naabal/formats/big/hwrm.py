@@ -28,7 +28,7 @@ import datetime
 from naabal.formats.big import GearboxEncryptedBigFile
 from naabal.formats.big.hw1 import HomeworldBigHeader, HomeworldBigTocEntry, HomeworldBigFile
 from naabal.formats.big.hw2 import Homeworld2BigFile
-from naabal.formats.big.keys import GEARBOX_HOMEWORLD_REMASTERED_KEY
+from naabal.util.keys import GEARBOX_HOMEWORLD_REMASTERED_KEY
 
 
 class HomeworldClassicBigHeader(HomeworldBigHeader): pass

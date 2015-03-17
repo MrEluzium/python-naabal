@@ -22,19 +22,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import zlib
+ROTL = lambda uint32, bits: CAST_TO_UINT32((uint32 << bits) | CAST_TO_CHAR(uint32 >> (32 - bits)))
 
+SPLIT_TO_BYTES = lambda uint32: bytearray((uint32 & (0xFF << s)) >> s \
+    for s in range(0, 32, 8))
 
-class classproperty(property):
-    def __get__(self, cls, owner):
-        return self.fget.__get__(None, owner)()
+CAST_TO_CHAR = lambda uint32: uint32 & 0xFF
+CAST_TO_UINT32 = lambda value: value & 0xFFFFFFFF
 
-
-def split_by(iterable, chunk_size):
-    return (iterable[pos:pos+chunk_size] for pos in xrange(0, len(iterable), chunk_size))
-
-def crc32(data):
-    return zlib.crc32(data) & 0xFFFFFFFF
-
-def unpack_key(key):
-    return bytearray(key.strip().decode('base64'))
+COMBINE_BYTES = lambda bytes: reduce(
+    lambda p, n: p | (n[0] << n[1]),
+    zip(bytes, xrange(0, 32, 8)), 0)

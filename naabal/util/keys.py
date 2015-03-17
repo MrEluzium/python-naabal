@@ -23,8 +23,8 @@
 # SOFTWARE.
 
 
-def unpack_key(key):
-    return bytearray(key.strip().decode('base64'))
+from naabal.util import unpack_key
+
 
 GEARBOX_HOMEWORLD_REMASTERED_KEY = unpack_key("""
 AAAAAJYwB3csYQ7uulEJmRnEbQeP9GpwNaVj6aOVZJ4yiNsOpLjceR7p1eCI2dKXK0y2Cb18sX4H

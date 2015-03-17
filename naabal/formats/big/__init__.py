@@ -27,7 +27,8 @@ import struct
 import os
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
-from naabal.util import ROTL, SPLIT_TO_BYTES, CAST_TO_CHAR
+from naabal.util import split_by
+from naabal.util.c_macros import ROTL, SPLIT_TO_BYTES, CAST_TO_CHAR, COMBINE_BYTES
 from naabal.errors import GearboxEncryptionException
 
 
@@ -71,8 +72,6 @@ class GearboxEncryptedBigFile(BigFile):
         encrypted_data = bytearray(self._handle.read(size))
         decrypted_data = ''.join(chr(CAST_TO_CHAR(c + self._encryption_key[(key_offset + i) % key_size])) \
             for i, c in zip(range(len(encrypted_data)), encrypted_data))
-        if decrypted_data[:8] != '_ARCHIVE':
-            raise Exception('Decryption failed: %r -> %r' % (encrypted_data[:8], decrypted_data[:8]))
         return decrypted_data
 
     def _load_encryption_key(self):
@@ -84,26 +83,28 @@ class GearboxEncryptedBigFile(BigFile):
             encrypted_data_size = self.tell()
             marker = struct.unpack('<L', self._handle.read(4))[0]
             if marker == self.ENCRYPTION_KEY_MARKER:
-                encryption_key_size = struct.unpack('<H', self._handle.read(2))[0]
-                if encryption_key_size <= self.ENCRYPTION_KEY_MAX_SIZE:
+                encryption_key_bytes = struct.unpack('<H', self._handle.read(2))[0]
+                if encryption_key_bytes <= self.ENCRYPTION_KEY_MAX_SIZE:
                     self._encrypted_data_size = encrypted_data_size
-                    local_encryption_key = bytearray(self._handle.read(encryption_key_size))
-                    encryption_key = self._combine_keys(local_encryption_key, self.MASTER_KEY)
+                    local_encryption_key = bytearray(self._handle.read(encryption_key_bytes))
+                    encryption_key = self._combine_keys(encryption_key_bytes,
+                        local_encryption_key, self.MASTER_KEY)
                     self._encryption_key = encryption_key
                 else:
                     raise GearboxEncryptionException('Invalid encryption key size: %d > %d' %
-                        (encryption_key_size, self.ENCRYPTION_KEY_MAX_SIZE))
+                        (encryption_key_bytes, self.ENCRYPTION_KEY_MAX_SIZE))
             else:
                 raise GearboxEncryptionException('Unexpected marker value: 0x%08X should be 0x%08X' %
                     (marker, self.ENCRYPTION_KEY_MARKER))
         else:
             raise GearboxEncryptionException('Invalid marker offset: %d', marker_offset)
 
-    def _combine_keys(self, local_key, global_key):
-        key_size = len(local_key)
-        combined_key = bytearray('\x00' * key_size)
-        for i in xrange(0, key_size, 4):
-            c = local_key[i/4]
+    def _combine_keys(self, key_byte_count, local_key, global_key):
+        local_key = [COMBINE_BYTES(bytes) for bytes in split_by(local_key, 4)]
+        global_key = [COMBINE_BYTES(bytes) for bytes in split_by(global_key, 4)]
+        combined_key = bytearray(key_byte_count)
+        for i in xrange(0, key_byte_count, 4):
+            c = local_key[i / 4]
             for b in range(4):
                 bytes = SPLIT_TO_BYTES(ROTL(c + self._encrypted_data_size, 8))
                 for j in range(4):

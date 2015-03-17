@@ -346,7 +346,7 @@ class Homeworld2BigFileEntry(BigSection):
         },
     ]
 
-class Homworld2BigFileEntryList(BigSequence):
+class Homeworld2BigFileEntryList(BigSequence):
     CHILD_TYPE      = Homeworld2BigFileEntry
 
 class Homeworld2BigObject(object):
