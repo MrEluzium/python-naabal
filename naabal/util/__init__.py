@@ -23,6 +23,8 @@
 # SOFTWARE.
 
 import zlib
+import datetime
+import time
 
 
 class classproperty(property):
@@ -38,3 +40,9 @@ def crc32(data):
 
 def unpack_key(key):
     return bytearray(key.strip().decode('base64'))
+
+def timestamp_to_datetime(ts):
+    return datetime.datetime.utcfromtimestamp(float(ts))
+
+def datetime_to_timestamp(dt):
+    return int(time.mktime(dt.utctimetuple()))

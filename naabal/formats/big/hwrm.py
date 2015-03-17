@@ -26,8 +26,10 @@
 import datetime
 
 from naabal.formats.big import GearboxEncryptedBigFile
-from naabal.formats.big.hw1 import HomeworldBigHeader, HomeworldBigTocEntry, HomeworldBigFile
+from naabal.formats.big.hw1 import HomeworldBigHeader, HomeworldBigTocEntry, \
+    HomeworldBigToc, HomeworldBigFile
 from naabal.formats.big.hw2 import Homeworld2BigFile
+from naabal.util import datetime_to_timestamp, timestamp_to_datetime
 from naabal.util.keys import GEARBOX_HOMEWORLD_REMASTERED_KEY
 
 
@@ -60,7 +62,7 @@ class HomeworldClassicBigTocEntry(HomeworldBigTocEntry):
             'write':    int,
         },
         {   # seems to just be more padding
-            'key':      'unknown1',
+            'key':      'padding1',
             'fmt':      'H',
             'len':      1,
             'default':  0xA7,
@@ -96,11 +98,11 @@ class HomeworldClassicBigTocEntry(HomeworldBigTocEntry):
             'fmt':      'L',
             'len':      1,
             'default':  0x00,
-            'read':     lambda v: datetime.datetime.utcfromtimestamp(float(v)),
-            'write':    int, # TODO: this needs to change a datetime to an int
+            'read':     timestamp_to_datetime,
+            'write':    datetime_to_timestamp,
         },
         {   # compiler-added padding, not used for anything
-            'key':      'padding1',
+            'key':      'padding2',
             'fmt':      'L',
             'len':      1,
             'default':  0x00,
@@ -108,7 +110,7 @@ class HomeworldClassicBigTocEntry(HomeworldBigTocEntry):
             'write':    int,
         },
         {   # flag for if the entry data is compressed, should match data_stored_size < data_real_size
-            'key':      'data_compressed_flag',
+            'key':      'compression_flag',
             'fmt':      'L',
             'len':      1,
             'default':  False,
@@ -117,9 +119,14 @@ class HomeworldClassicBigTocEntry(HomeworldBigTocEntry):
         },
     ]
 
+class HomeworldClassicBigToc(HomeworldBigToc):
+    CHILD_TYPE = HomeworldClassicBigTocEntry
+
 class HomeworldClassicBigFile(HomeworldBigFile):
-    HEADER_CLASS    = HomeworldClassicBigHeader
-    TOC_ENTRY_CLASS = HomeworldClassicBigTocEntry
+    STRUCTURE       = [
+        ('header',              HomeworldClassicBigHeader),
+        ('table_of_contents',   HomeworldClassicBigToc),
+    ]
 
 class Homeworld2ClassicBigFile(Homeworld2BigFile): pass
 

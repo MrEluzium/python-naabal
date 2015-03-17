@@ -59,6 +59,7 @@ if __name__ == '__main__':
         should_extract = lambda fn: True
 
     with FORMAT_IDX[args.format](args.filename) as bigfile:
+        bigfile.load()
         for filename, entry in bigfile.walk_entries():
             full_filename = os.path.join(args.destination, filename)
             if should_extract(filename):

@@ -26,6 +26,7 @@
 import os.path
 import zlib
 
+from naabal.errors import BigFormatException
 from naabal.formats.big import BigSection, BigFile, BigSequence
 from naabal.util import crc32
 
@@ -92,6 +93,11 @@ class Homeworld2BigArchiveHeader(BigSection):
             'write':    int,
         },
     ]
+
+    def check(self):
+        if self['magic_cookie'] != '_ARCHIVE':
+            raise BigFormatException('Incorrect magic cookie: %s' % self['magic_cookie'])
+        return True
 
 class Homeworld2BigSectionHeader(BigSection):
     STRUCTURE = [
@@ -224,6 +230,9 @@ class Homeworld2BigTocEntry(BigSection):
 class Homeworld2BigToc(BigSequence):
     CHILD_TYPE      = Homeworld2BigTocEntry
 
+    def _get_expected_length(self, handle):
+        return handle._data['section_header']['toc_list_count']
+
 class Homeworld2BigFolderEntry(BigSection):
     STRUCTURE = [
         {
@@ -270,6 +279,9 @@ class Homeworld2BigFolderEntry(BigSection):
 
 class Homeworld2BigFolderList(BigSequence):
     CHILD_TYPE      = Homeworld2BigFolderEntry
+
+    def _get_expected_length(self, handle):
+        return handle._data['section_header']['folder_list_count']
 
 class Homeworld2BigFileInfoEntry(BigSection):
     STRUCTURE = [
@@ -318,6 +330,9 @@ class Homeworld2BigFileInfoEntry(BigSection):
 class Homeworld2BigFileInfoList(BigSequence):
     CHILD_TYPE      = Homeworld2BigFileInfoEntry
 
+    def _get_expected_length(self, handle):
+        return handle._data['section_header']['file_info_list_count']
+
 class Homeworld2BigFileEntry(BigSection):
     STRUCTURE = [
         {
@@ -348,6 +363,9 @@ class Homeworld2BigFileEntry(BigSection):
 
 class Homeworld2BigFileEntryList(BigSequence):
     CHILD_TYPE      = Homeworld2BigFileEntry
+
+    def _get_expected_length(self, handle):
+        return handle._data['section_header']['filename_list_count']
 
 class Homeworld2BigObject(object):
     def __init__(self):
@@ -396,14 +414,6 @@ class Homeworld2BigFile(BigFile):
         for file_info in self._data['file_info'][folder_entry['first_fileinfo_idx']:folder_entry['last_fileinfo_idx']]:
             yield os.path.join(folder_name, self.get_filename(file_info)), file_info
 
-    def _get_sequence_length(self, key):
-        return {
-            'table_of_contents':    lambda: self._data['section_header']['toc_list_count'],
-            'folders':              lambda: self._data['section_header']['folder_list_count'],
-            'file_info':            lambda: self._data['section_header']['file_info_list_count'],
-            'filenames':            lambda: self._data['section_header']['filename_list_count'],
-        }.get(key)()
-
     def _get_file_data_offset(self, file_info_entry):
         return self._data['archive_header']['file_data_offset'] + file_info_entry['file_data_offset']
 
@@ -415,7 +425,7 @@ class Homeworld2BigFile(BigFile):
     def _get_file_metadata(self, file_info_entry):
         self.seek(self._get_file_data_offset(file_info_entry) - Homeworld2BigFileEntry.data_size)
         file_metadata = Homeworld2BigFileEntry()
-        file_metadata.populate(self.read(file_metadata.data_size))
+        file_metadata.load(self)
         return file_metadata
 
     def _reverse_filename(self, file_info_entry):

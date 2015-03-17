@@ -48,5 +48,6 @@ if __name__ == '__main__':
     parser.add_argument('filename')
     args = parser.parse_args()
     with FORMAT_IDX[args.format](args.filename) as bigfile:
+        bigfile.load()
         for filename, entry in bigfile.walk_entries():
             print filename

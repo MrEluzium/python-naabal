@@ -36,7 +36,7 @@ class StructuredFile(object):
     _mode = None
     _name = None
     _closed = True
-    _data = {}
+    _data = None
     softspace = 0
 
     @property
@@ -65,10 +65,7 @@ class StructuredFile(object):
         self._closed = False
         self._name = handle.name
         self._handle = handle
-        self.populate()
-
-    def __iter__(self):
-        return self
+        self._load_defaults()
 
     def __enter__(self):
         return self
@@ -116,34 +113,41 @@ class StructuredFile(object):
 
     def truncate(self, size=None): pass
 
-    def write(self, data): pass
-    def writelines(self, seq): pass
+    def write(self, data):
+        return self._handle.write(data)
 
-    def populate(self):
+    def load(self):
         self.seek(0)
-        for idx, (key, member_type) in zip(xrange(len(self.STRUCTURE)), self.STRUCTURE):
-            if issubclass(member_type, StructuredFileSequence):
-                self._data[key] = member_type(self.read(
-                    self._get_sequence_length(key) * member_type.CHILD_TYPE.data_size))
-            else:
-                self._data[key] = member_type(self.read(member_type.data_size))
+        # this could be done with dict comprehension, except sequences refer back
+        # to data that should already be loaded and with a comprehension it isn't
+        # assigned to _data until after load() finishes
+        self._data = {}
+        for key, member_type in self.STRUCTURE:
+            self._data[key] = member_type(self)
         self.check()
+
+    def save(self):
+        raise NotImplemented()
+        self.seek(0)
+        for key, member_type in self.STRUCTURE:
+            self._data[key].save(self)
 
     def check(self):
         return True
 
-    def _get_sequence_length(self, key):
-        raise NotImplemented()
+    def _load_defaults(self):
+        self._data = {key: member_type() for key, member_type in self.STRUCTURE}
 
 class StructuredFileSection(object):
     ENDIANNESS          = '<'
     STRUCTURE           = []
     _data               = None
 
-    def __init__(self, data=None):
-        self._data = {key: None for key in self.keys}
-        if data is not None:
-            self.populate(data)
+    def __init__(self, handle=None):
+        if handle is not None:
+            self.load(handle)
+        else:
+            self._load_defaults()
 
     def __getitem__(self, key):
         return self._data.get(key)
@@ -156,9 +160,6 @@ class StructuredFileSection(object):
 
     def __repr__(self):
         return repr(self._data)
-
-    def __str__(self):
-        return str(self._data)
 
     def __len__(self):
         return self.data_size
@@ -187,8 +188,9 @@ class StructuredFileSection(object):
         else:
             return struct.unpack(self.data_format, data)
 
-    def populate(self, data):
-        unpacked_data = self.unpack(data)
+    def load(self, handle):
+        self._data = {}
+        unpacked_data = self.unpack(handle.read(self.data_size))
         idx = 0
         for member in self.STRUCTURE:
             if member['len'] == 1:
@@ -197,19 +199,29 @@ class StructuredFileSection(object):
                 self._data[member['key']] = \
                     member['read'](unpacked_data[idx:idx+member['len']])
             idx += member['len']
-
         self.check()
+
+    def save(self, handle):
+        self.check()
+        packed_data = struct.pack(self.data_format,
+            *(m['write'](self._data[m['key']]) for m in self.STRUCTURE))
+        handle.write(packed_data)
 
     def check(self):
         return True
+
+    def _load_defaults(self):
+        self._data = {member['key']: member['default'] for member in self.STRUCTURE}
 
 class StructuredFileSequence(object):
     CHILD_TYPE      = None
     _data_list      = None
 
-    def __init__(self, data=None):
-        if data is not None:
-            self.populate(data)
+    def __init__(self, handle=None):
+        if handle is not None:
+            self.load(handle)
+        else:
+            self._load_defaults()
 
     def __getitem__(self, key):
         return self._data_list[key]
@@ -222,13 +234,25 @@ class StructuredFileSequence(object):
     def __iter__(self):
         return (member for member in self._data_list)
 
+    def __repr__(self):
+        return repr(self._data_list)
+
     def __len__(self):
         return len(self._data_list)
 
-    def populate(self, data):
-        if len(data) % self.CHILD_TYPE.data_size != 0:
-            raise ValueError()
-        self._data_list = [self.CHILD_TYPE(chunk) for chunk in split_by(data, self.CHILD_TYPE.data_size)]
+    def load(self, handle):
+        self._data_list = [self.CHILD_TYPE(handle) \
+            for i in xrange(self._get_expected_length(handle))]
+
+    def save(self, handle):
+        for child in self._data_list:
+            child.save(handle)
 
     def check(self):
         return all(child.check() for child in self._data_list)
+
+    def _load_defaults(self):
+        self._data_list = []
+
+    def _get_expected_length(self, handle):
+        raise NotImplemented()

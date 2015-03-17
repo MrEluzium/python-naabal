@@ -27,12 +27,14 @@ import datetime
 import os.path
 
 from naabal.errors import BigFormatException
+from naabal.util import timestamp_to_datetime, datetime_to_timestamp
 from naabal.util.lzss import LZSSDecompressor
 from naabal.formats import StructuredFileSequence
 from naabal.formats.big import BigFile, BigSection, BigSequence
 
 
 class HomeworldBigHeader(BigSection):
+    MAX_TOC_ENTRIES     = 65535 # completely arbitrary
     STRUCTURE           = [
         {   # format identifier
             'key':      'magic_cookie',
@@ -63,13 +65,14 @@ class HomeworldBigHeader(BigSection):
     def check(self):
         if self['magic_cookie'] != 'RBF1.23':
             raise BigFormatException('Incorrect magic cookie: %s' % self['magic_cookie'])
-        if self['toc_entry_count'] < 0 or self['toc_entry_count'] > 20000: #arbitrary
+        if self['toc_entry_count'] < 0 or self['toc_entry_count'] > self.MAX_TOC_ENTRIES:
             raise BigFormatException('Invalid ToC entry count: %d' % self['toc_entry_count'])
         if not self['toc_sorted_flag']:
             raise BigFormatException('ToC sorted flag not set')
         return True
 
 class HomeworldBigTocEntry(BigSection):
+    MAX_FILENAME_LEN    = 128 # per src/Game/bigfile.h:78
     STRUCTURE           = [
         {   # high bits of the name CRC
             'key':      'name_crc_start',
@@ -124,8 +127,8 @@ class HomeworldBigTocEntry(BigSection):
             'fmt':      'L',
             'len':      1,
             'default':  0x00,
-            'read':     lambda v: datetime.datetime.utcfromtimestamp(float(v)),
-            'write':    int,
+            'read':     timestamp_to_datetime,
+            'write':    datetime_to_timestamp,
         },
         {   # flag for if the entry data is compressed, should match data_stored_size < data_real_size
             'key':      'compression_flag',
@@ -136,7 +139,7 @@ class HomeworldBigTocEntry(BigSection):
             'write':    lambda v: 0x01 if v else 0x00,
         },
         {   # compiler-added padding, not used for anything
-            'key':      'padding',
+            'key':      'padding1',
             'fmt':      'c',
             'len':      3,
             'default':  '\xC9\xCA\xCB',
@@ -150,19 +153,23 @@ class HomeworldBigTocEntry(BigSection):
             raise BigFormatException('Invalid value for CRC-start: %x' % self['name_crc_start'])
         if self['name_crc_end'] < 0 or self['name_crc_end'] > 0xFFFFFFFF:
             raise BigFormatException('Invalid value for CRC-end: %x' % self['name_crc_end'])
-        if self['name_length'] > 128:
+        if self['name_length'] > self.MAX_FILENAME_LEN:
             raise BigFormatException('Filename length too long: %d' % self['name_length'])
         if self['data_stored_size'] > self['data_real_size']:
             raise BigFormatException('Stored data size is larger than real size by %d bytes' %
                 (self['data_stored_size'] - self['data_real_size']))
-        if self['timestamp'] > datetime.datetime.now():
+        if self['timestamp'] > datetime.datetime.utcnow():
             raise BigFormatException('Invalid timestamp: %s' % self['timestamp'])
         if self['compression_flag'] is not (self['data_stored_size'] < self['data_real_size']):
-            raise BigFormatException('Data compression flag does not match data sizes')
+            raise BigFormatException('Data compression flag does not match data sizes: %s != (%d < %d)' %
+                (self['compression_flag'], self['data_stored_size'], self['data_real_size']))
         return True
 
 class HomeworldBigToc(BigSequence):
     CHILD_TYPE      = HomeworldBigTocEntry
+
+    def _get_expected_length(self, handle):
+        return handle._data['header']['toc_entry_count']
 
 class HomeworldBigFile(BigFile):
     STRUCTURE       = [
@@ -202,8 +209,3 @@ class HomeworldBigFile(BigFile):
             char_mask = char_mask ^ ord(char)
             decrypted_chars.append(chr(char_mask))
         return ''.join(decrypted_chars)
-
-    def _get_sequence_length(self, key):
-        return {
-            'table_of_contents':    lambda: self._data['header']['toc_entry_count'],
-        }.get(key)()

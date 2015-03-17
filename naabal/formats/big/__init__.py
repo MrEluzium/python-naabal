@@ -25,6 +25,7 @@
 
 import struct
 import os
+from tarfile import _FileInFile
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
 from naabal.util import split_by
@@ -32,7 +33,85 @@ from naabal.util.c_macros import ROTL, SPLIT_TO_BYTES, CAST_TO_CHAR, COMBINE_BYT
 from naabal.errors import GearboxEncryptionException
 
 
-class BigFile(StructuredFile): pass
+class BigInfo(object):
+    _bigfile        = None
+    _offset         = 0
+    _name           = None
+    _mtime          = None
+    _compressed     = False
+    _real_size      = 0
+    _stored_size    = 0
+    _crc32          = 0x00
+
+    def __init__(self, bigfile):
+        self._bigfile = bigfile
+
+    def load(self, data):
+        raise NotImplemented()
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def mtime(self):
+        return self._mtime
+
+    @property
+    def is_compressed(self):
+        return self._compressed
+
+    @property
+    def real_size(self):
+        return self._real_size
+
+    @property
+    def stored_size(self):
+        return self._stored_size
+
+    @property
+    def crc32(self):
+        return self._crc32
+
+
+class BigFile(StructuredFile):
+    _members        = []
+
+    def __iter__(self):
+        return iter(self.get_members())
+
+    def open_member(self, member):
+        return _FileInFile(self, member._offset, member.stored_size)
+
+    def get_member(self, filename):
+        for member in self.get_members():
+            if member.name == filename:
+                return member
+        else:
+            raise KeyError()
+
+    def get_members(self):
+        return self._members
+
+    def get_filenames(self):
+        return [member.name for member in self.get_members()]
+
+    def extract(self, member, path=""):
+        with self.open_member(member) as infile:
+            with open(os.path.join(path, member.name), 'w') as outfile:
+                outfile.write(infile.read())
+
+    def extract_all(self, members=None, path=""):
+        if members is None:
+            members = self.get_members()
+        for member in members:
+            self.extract(member, path)
+
+    def add(self, filename): pass
+    def add_file(self, fileobj): pass
+
+    def get_biginfo(self, filename): pass
+
 class BigSection(StructuredFileSection): pass
 class BigSequence(StructuredFileSequence): pass
 
@@ -44,9 +123,9 @@ class GearboxEncryptedBigFile(BigFile):
     _encrypted_data_size        = None
     _encryption_key             = None
 
-    def populate(self):
+    def load(self):
         self._load_encryption_key()
-        super(GearboxEncryptedBigFile, self).populate()
+        super(GearboxEncryptedBigFile, self).load()
 
     def read(self, size=None):
         if self._encrypted_data_size is None:

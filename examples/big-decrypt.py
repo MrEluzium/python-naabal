@@ -37,6 +37,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     with HomeworldRemasteredBigFile(args.src_filename) as infile:
+        bigfile.load()
         with open(args.dest_filename, 'w') as outfile:
             chunk_size = args.chunk_size
             data_size = infile._encrypted_data_size
