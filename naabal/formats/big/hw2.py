@@ -27,8 +27,8 @@ import os.path
 import zlib
 
 from naabal.errors import BigFormatException
-from naabal.formats.big import BigSection, BigFile, BigSequence
-from naabal.util import crc32
+from naabal.formats.big import BigSection, BigFile, BigSequence, BigInfo
+from naabal.util import crc32, datetime_to_timestamp, timestamp_to_datetime
 
 
 MAX_FILENAME_LENGTH             = 256
@@ -344,12 +344,12 @@ class Homeworld2BigFileEntry(BigSection):
             'write':    str,
         },
         {
-            'key':      'mtime',
+            'key':      'timestamp',
             'fmt':      'L',
             'len':      1,
             'default':  0x00,
-            'read':     int,
-            'write':    int,
+            'read':     timestamp_to_datetime,
+            'write':    datetime_to_timestamp,
         },
         {
             'key':      'crc32',
@@ -367,9 +367,14 @@ class Homeworld2BigFileEntryList(BigSequence):
     def _get_expected_length(self, handle):
         return handle._data['section_header']['filename_list_count']
 
-class Homeworld2BigObject(object):
-    def __init__(self):
-        pass
+class Homeworld2BigInfo(BigInfo):
+    def load(self, data):
+        metadata = self._bigfile._get_file_metadata(data)
+        self._offset        = self._bigfile._get_file_data_offset(data)
+        self._name          = self._bigfile._get_full_filename(data)
+        self._mtime         = metadata['timestamp']
+        self._real_size     = data['data_real_size']
+        self._stored_size   = data['data_stored_size']
 
 class Homeworld2BigFile(BigFile):
     STRUCTURE           = [
@@ -380,39 +385,46 @@ class Homeworld2BigFile(BigFile):
         ('file_info',               Homeworld2BigFileInfoList),
     ]
 
-    def __iter__(self):
-        return self.walk_entries()
-        return (entry for entry in self._data['file_info'])
+    COMPRESSION_ALGORITHM       = zlib
+    MIN_BATCH_COMPRESSION_SIZE  = 4 * 1024 # 4KB
 
-    def get_filename(self, file_info_entry):
+    def _get_members(self):
+        self._filename_map = self._build_filename_map()
+        members = []
+        for file_info in self._data['file_info']:
+            member = Homeworld2BigInfo(self)
+            member.load(file_info)
+            members.append(member)
+        return members
+
+    def _build_filename_map(self):
+        fn_map = [None] * len(self._data['file_info'])
+        for fn, fi in self._walk_contents():
+            fn_map[self._data['file_info']._data_list.index(fi)] = fn
+        return fn_map
+
+    def _read_filename(self, file_info_entry):
         self.seek(self._get_filename_offset(file_info_entry))
         filename = self.read(MAX_FILENAME_LENGTH).split('\x00', 1)[0]
-        filename = os.path.join(*filename.split('\\'))
+        filename = self._normalize_filename(filename)
         return filename
 
-    def get_data(self, file_info_entry):
-        file_metadata = self._get_file_metadata(file_info_entry)
-        self.seek(self._get_file_data_offset(file_info_entry))
-        data = self.read(file_info_entry['data_stored_size'])
-        if file_info_entry['compression_flag']:
-            data = zlib.decompress(data)
-        if file_metadata['crc32'] != crc32(data):
-            raise Exception('CRC32 mismatch')
-        return data
+    def _normalize_filename(self, filename):
+        return os.path.join(*filename.split('\\'))
 
-    def walk_entries(self):
+    def _walk_contents(self):
         for toc_entry in self._data['table_of_contents']:
             for item_path, item in self._walk_folder(self._data['folders'][toc_entry['start_folder_idx']]):
                 yield os.path.join(toc_entry['filename'], item_path), item
 
     def _walk_folder(self, folder_entry):
-        folder_name = self.get_filename(folder_entry) or ''
+        folder_name = self._read_filename(folder_entry) or ''
         if folder_entry['first_subfolder_idx'] != folder_entry['last_subfolder_idx']:
             for subfolder in self._data['folders'][folder_entry['first_subfolder_idx']:folder_entry['last_subfolder_idx']]:
                 for item_path, item in self._walk_folder(subfolder):
                     yield item_path, item
         for file_info in self._data['file_info'][folder_entry['first_fileinfo_idx']:folder_entry['last_fileinfo_idx']]:
-            yield os.path.join(folder_name, self.get_filename(file_info)), file_info
+            yield os.path.join(folder_name, self._read_filename(file_info)), file_info
 
     def _get_file_data_offset(self, file_info_entry):
         return self._data['archive_header']['file_data_offset'] + file_info_entry['file_data_offset']
@@ -424,10 +436,8 @@ class Homeworld2BigFile(BigFile):
 
     def _get_file_metadata(self, file_info_entry):
         self.seek(self._get_file_data_offset(file_info_entry) - Homeworld2BigFileEntry.data_size)
-        file_metadata = Homeworld2BigFileEntry()
-        file_metadata.load(self)
+        file_metadata = Homeworld2BigFileEntry(self)
         return file_metadata
 
-    def _reverse_filename(self, file_info_entry):
-        file_info_idx = self._data['file_info'].index(file_info_entry)
-        toc_entry_idx = [toc_entry]
+    def _get_full_filename(self, file_info_entry):
+        return self._filename_map[self._data['file_info']._data_list.index(file_info_entry)]

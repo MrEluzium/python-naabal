@@ -1,4 +1,3 @@
-#/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
@@ -23,36 +22,25 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import datetime
+from naabal.formats.big.hw1 import HomeworldBigFile
+from naabal.formats.big.hw2 import Homeworld2BigFile
+from naabal.formats.big.hwrm import HomeworldClassicBigFile, HomeworldRemasteredBigFile
 
-from naabal.util.helpers import big_open
+BIG_FORMATS     = [
+    HomeworldRemasteredBigFile,
+    Homeworld2BigFile,
+    HomeworldClassicBigFile,
+    HomeworldBigFile,
+]
 
-NOW_YEAR = datetime.datetime.utcnow().year
-
-def format_mtime(mtime):
-    if mtime.year == NOW_YEAR:
-        return mtime.strftime('%b %d %H:%M')
+def big_open(filename, mode='rb'):
+    for big_fmt in BIG_FORMATS:
+        bigfile = big_fmt(filename, mode)
+        try:
+            bigfile.load()
+        except Exception:
+            continue
+        else:
+            return bigfile
     else:
-        return mtime.strftime('%b %d  %Y')
-
-if __name__ == '__main__':
-    import argparse
-
-    parser = argparse.ArgumentParser(prog='big-ls.py',
-        description='List contents of a .big file')
-    parser.add_argument('-l', '--long', action='store_true')
-    parser.add_argument('filename')
-    args = parser.parse_args()
-    with big_open(args.filename) as bigfile:
-        bigfile.load()
-        for member in bigfile:
-            if args.long:
-                print '{0} {1:8d} +{2:8d} {3} {4}'.format(
-                    'c' if member.is_compressed else 'N',
-                    member.stored_size,
-                    member.real_size - member.stored_size,
-                    format_mtime(member.mtime),
-                    member.name
-                )
-            else:
-                print member.name
+        raise ValueError('Unable to determine appropriate .big format')

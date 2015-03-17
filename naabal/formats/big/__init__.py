@@ -25,6 +25,8 @@
 
 import struct
 import os
+import os.path
+from cStringIO import StringIO
 from tarfile import _FileInFile
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
@@ -38,10 +40,8 @@ class BigInfo(object):
     _offset         = 0
     _name           = None
     _mtime          = None
-    _compressed     = False
     _real_size      = 0
     _stored_size    = 0
-    _crc32          = 0x00
 
     def __init__(self, bigfile):
         self._bigfile = bigfile
@@ -59,7 +59,7 @@ class BigInfo(object):
 
     @property
     def is_compressed(self):
-        return self._compressed
+        return self.real_size > self.stored_size
 
     @property
     def real_size(self):
@@ -69,19 +69,34 @@ class BigInfo(object):
     def stored_size(self):
         return self._stored_size
 
-    @property
-    def crc32(self):
-        return self._crc32
-
-
 class BigFile(StructuredFile):
     _members        = []
 
     def __iter__(self):
         return iter(self.get_members())
 
+    def __len__(self):
+        return len(self._members)
+
+    def load(self):
+        super(BigFile, self).load()
+        self._members = self._get_members()
+
+    def check_format(self):
+        key, member_type = self.STRUCTURE[0]
+        self.seek(0)
+        try:
+            member_type(self)
+        except Exception:
+            return False
+        return True
+
     def open_member(self, member):
-        return _FileInFile(self, member._offset, member.stored_size)
+        if member.is_compressed:
+            return StringIO(self.COMPRESSION_ALGORITHM.decompress(
+                self.read(member.stored_size)))
+        else:
+            return _FileInFile(self, member._offset, member.stored_size)
 
     def get_member(self, filename):
         for member in self.get_members():
@@ -96,12 +111,18 @@ class BigFile(StructuredFile):
     def get_filenames(self):
         return [member.name for member in self.get_members()]
 
-    def extract(self, member, path=""):
+    def extract(self, member, path=''):
+        full_filename = os.path.join(path, member.name)
+        try:
+            os.makedirs(os.path.dirname(full_filename))
+        except os.error:
+            # leaf dir already exists (probably)
+            pass
         with self.open_member(member) as infile:
             with open(os.path.join(path, member.name), 'w') as outfile:
                 outfile.write(infile.read())
 
-    def extract_all(self, members=None, path=""):
+    def extract_all(self, members=None, path=''):
         if members is None:
             members = self.get_members()
         for member in members:
@@ -110,7 +131,8 @@ class BigFile(StructuredFile):
     def add(self, filename): pass
     def add_file(self, fileobj): pass
 
-    def get_biginfo(self, filename): pass
+    def _get_members(self):
+        raise NotImplemented()
 
 class BigSection(StructuredFileSection): pass
 class BigSequence(StructuredFileSequence): pass
@@ -126,6 +148,13 @@ class GearboxEncryptedBigFile(BigFile):
     def load(self):
         self._load_encryption_key()
         super(GearboxEncryptedBigFile, self).load()
+
+    def check_format(self):
+        try:
+            self._load_encryption_key()
+        except Exception:
+            return False
+        return super(GearboxEncryptedBigFile, self).check_format()
 
     def read(self, size=None):
         if self._encrypted_data_size is None:

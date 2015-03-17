@@ -30,7 +30,7 @@ from naabal.errors import BigFormatException
 from naabal.util import timestamp_to_datetime, datetime_to_timestamp
 from naabal.util.lzss import LZSSDecompressor
 from naabal.formats import StructuredFileSequence
-from naabal.formats.big import BigFile, BigSection, BigSequence
+from naabal.formats.big import BigFile, BigSection, BigSequence, BigInfo
 
 
 class HomeworldBigHeader(BigSection):
@@ -171,6 +171,14 @@ class HomeworldBigToc(BigSequence):
     def _get_expected_length(self, handle):
         return handle._data['header']['toc_entry_count']
 
+class HomeworldBigInfo(BigInfo):
+    def load(self, data):
+        self._offset        = data['entry_offset'] + data['name_length'] + 1
+        self._name          = self._bigfile._read_filename(data)
+        self._mtime         = data['timestamp']
+        self._real_size     = data['data_real_size']
+        self._stored_size   = data['data_stored_size']
+
 class HomeworldBigFile(BigFile):
     STRUCTURE       = [
         ('header',              HomeworldBigHeader),
@@ -180,32 +188,29 @@ class HomeworldBigFile(BigFile):
     MIN_COMPRESSION_RATIO       = 0.950
     COMPRESSION_ALGORITHM       = LZSSDecompressor()
 
-    def __iter__(self):
-        return (entry for entry in self._data['table_of_contents'])
-
-    def walk_entries(self):
-        for entry in self:
-            yield self.get_filename(entry), entry
-
-    def get_filename(self, toc_entry):
+    def _read_filename(self, toc_entry):
         self.seek(toc_entry['entry_offset'])
         filename = self.read(toc_entry['name_length'] + 1)[:-1] # skip the null byte
-        filename = self._decrypt_filename(filename)
-        filename = os.path.join(*filename.split('\\'))
+        filename = self._decode_filename(filename)
+        filename = self._normalize_filename(filename)
         return filename
 
-    def get_data(self, toc_entry):
-        self.seek(toc_entry['entry_offset'] + toc_entry['name_length'] + 1)
-        file_data = self.read(toc_entry['data_stored_size'])
-        if toc_entry['compression_flag']:
-            return self.COMPRESSION_ALGORITHM.decompress(file_data)
-        else:
-            return file_data
-
-    def _decrypt_filename(self, filename):
+    def _decode_filename(self, filename):
         char_mask = 0xD5        # Game/bigfile.c:530 of HW1 source
         decrypted_chars = []
         for char in filename:
             char_mask = char_mask ^ ord(char)
             decrypted_chars.append(chr(char_mask))
         return ''.join(decrypted_chars)
+
+    def _normalize_filename(self, filename):
+        filename = os.path.join(*filename.split('\\'))
+        return filename
+
+    def _get_members(self):
+        members = []
+        for toc_entry in self._data['table_of_contents']:
+            member = HomeworldBigInfo(self)
+            member.load(toc_entry)
+            members.append(member)
+        return members
