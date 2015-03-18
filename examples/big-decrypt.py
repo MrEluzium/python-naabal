@@ -40,6 +40,6 @@ if __name__ == '__main__':
         bigfile.load()
         with open(args.dest_filename, 'w') as outfile:
             chunk_size = args.chunk_size
-            data_size = infile._encrypted_data_size
+            data_size = infile.data_size
             for i in xrange(0, data_size, chunk_size):
                 outfile.write(infile.read(chunk_size))
