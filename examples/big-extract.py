@@ -42,5 +42,7 @@ if __name__ == '__main__':
         if args.include_matching:
             member_list = [m for m in bigfile.get_members() if fnmatch.fnmatch(m.name, args.include_matching)]
         else:
-            member_list = None
-        bigfile.extract_all(member_list, args.destination)
+            member_list = bigfile.get_members()
+        for member in member_list:
+            bigfile.extract(member, args.destination)
+            print 'Extracted {size:8d} bytes: {name}'.format(size=member.real_size, name=member.name)
