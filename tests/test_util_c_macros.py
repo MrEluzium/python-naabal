@@ -36,16 +36,34 @@ class TestUtilCMacros(unittest.TestCase):
         self.assertEqual(0x44, CAST_TO_CHAR(test_value2))
 
     def test_split_to_bytes(self):
-        pass
+        test_value1 = 0x11223344
+
+        self.assertEqual(bytearray([0x44, 0x33, 0x22, 0x11]), SPLIT_TO_BYTES(test_value1))
 
     def test_cast_to_uint32(self):
-        pass
+        test_value1 = 0x11223344
+        test_value2 = 0xFF
+        test_value3 = 0xFFFFFFFFFF
+
+        self.assertEqual(test_value1, CAST_TO_UINT32(test_value1))
+        self.assertEqual(test_value2, CAST_TO_UINT32(test_value2))
+        self.assertEqual(0xFFFFFFFF, CAST_TO_UINT32(test_value3))
 
     def test_combine_bytes(self):
-        pass
+        test_value1 = 0x11223344
+
+        self.assertEqual(test_value1, COMBINE_BYTES(bytearray([0x44, 0x33, 0x22, 0x11])))
 
     def test_rotl(self):
-        pass
+        test_value1 = 0xFFFFFFFFFF
+        test_value2 = 0x1122334455
+        test_value3 = 0x44332211
+        test_value4 = 0x14827E85E
+
+        self.assertEqual(0xFFFFFFFF, ROTL(test_value1, 8))
+        self.assertEqual(0x33445522, ROTL(test_value2, 8))
+        self.assertEqual(0x33221144, ROTL(test_value3, 8))
+        self.assertEqual(0x27E85E48, ROTL(test_value4, 8))
 
 if __name__ == '__main__':
     unittest.main()
