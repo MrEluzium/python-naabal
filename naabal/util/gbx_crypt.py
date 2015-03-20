@@ -34,6 +34,10 @@ class GearboxCrypt(object):
         self._key_size = len(local_key)
         self._encryption_key = self._combine_keys(local_key, global_key)
 
+    @property
+    def encryption_key(self):
+        return self._encryption_key
+
     def decrypt(self, data, offset=0):
         data = bytearray(data)
         return ''.join(chr(CAST_TO_CHAR(c + self._encryption_key[(offset + i) % self._key_size])) \

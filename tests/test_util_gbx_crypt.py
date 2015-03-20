@@ -121,7 +121,11 @@ class TestUtilGbxCrypt(unittest.TestCase):
         self.crypto = None
 
     def test_combined_key(self):
-        self.assertEqual(TEST_COMBINED_KEY1, self.crypto._encryption_key)
+        self.assertEqual(TEST_COMBINED_KEY1, self.crypto.encryption_key)
+
+    def test_roundtrip(self):
+        output = self.crypto.decrypt(self.crypto.encrypt(TEST_DATA))
+        self.assertEqual(TEST_DATA, output)
 
     def test_decrypt(self):
         self.assertEqual(TEST_DATA, self.crypto.decrypt(TEST_DATA_ENCRYPTED))
