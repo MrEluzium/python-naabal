@@ -24,11 +24,11 @@
 
 
 import os.path
-import zlib
 
 from naabal.errors import BigFormatException
 from naabal.formats.big import BigSection, BigFile, BigSequence, BigInfo
 from naabal.util import crc32, datetime_to_timestamp, timestamp_to_datetime
+from naabal.util.zlib import ZLIB
 
 
 MAX_FILENAME_LENGTH             = 256
@@ -385,7 +385,7 @@ class Homeworld2BigFile(BigFile):
         ('file_info',               Homeworld2BigFileInfoList),
     ]
 
-    COMPRESSION_ALGORITHM       = zlib
+    COMPRESSION_ALGORITHM       = ZLIB()
     MIN_BATCH_COMPRESSION_SIZE  = 4 * 1024 # 4KB
 
     def _get_members(self):
