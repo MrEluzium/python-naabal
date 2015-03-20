@@ -82,6 +82,11 @@ ukFOutstlhhVmsNjtNstNztIAAA=
 """.strip().decode('base64')
 
 class TestUtilLzss(unittest.TestCase):
+    def test_roundtrip(self):
+        comp_data = compress(TEST_DATA1_DECOMPRESSED)
+        decomp_data = decompress(comp_data)
+        self.assertEqual(TEST_DATA1_DECOMPRESSED, decomp_data)
+
     def test_decompression(self):
         self.assertEqual(TEST_DATA1_DECOMPRESSED, decompress(TEST_DATA1_COMPRESSED))
 
