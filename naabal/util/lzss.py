@@ -247,7 +247,7 @@ class _LZSSTree(object):
 
             if i >= match_length:
                 match_length = i
-                match_position = test_node # !!
+                match_position = test_node
                 if match_length >= LZSS.LOOK_AHEAD_SIZE:
                     self.replace_node(test_node, new_node)
                     return (match_length, match_position)
