@@ -22,7 +22,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from itertools import izip
+try:
+    # py2
+    from itertools import izip
+except ImportError:
+    # py3k
+    izip = zip
 
 from naabal.util import split_by
 from naabal.util.c_macros import COMBINE_BYTES, SPLIT_TO_BYTES, ROTL, CAST_TO_CHAR
