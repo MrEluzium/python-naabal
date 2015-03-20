@@ -26,10 +26,10 @@
 import struct
 import os
 import os.path
-from cStringIO import StringIO
 from tarfile import _FileInFile
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
+from naabal.util import StringIO
 from naabal.util.gbx_crypt import GearboxCrypt
 from naabal.errors import GearboxEncryptionException
 

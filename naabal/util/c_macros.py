@@ -22,6 +22,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from functools import reduce
+
 ROTL = lambda uint32, bits: CAST_TO_UINT32((uint32 << bits) | CAST_TO_CHAR(uint32 >> (32 - bits)))
 
 SPLIT_TO_BYTES = lambda uint32: bytearray((uint32 & (0xFF << s)) >> s \

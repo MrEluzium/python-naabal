@@ -26,6 +26,17 @@ import zlib
 import datetime
 import time
 
+try:
+    # py2
+    from cStringIO import StringIO
+except ImportError:
+    try:
+        # py2 on some platform without cStringIO
+        from StringIO import StringIO
+    except ImportError:
+        # py3k
+        from io import StringIO
+
 
 class classproperty(property):
     def __get__(self, cls, owner):
