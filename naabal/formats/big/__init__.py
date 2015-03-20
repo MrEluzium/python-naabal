@@ -90,10 +90,15 @@ class BigFile(StructuredFile):
             return False
         return True
 
-    def open_member(self, member):
-        if member.is_compressed:
-            return StringIO(self.COMPRESSION_ALGORITHM.decompress(
-                self.read(member.stored_size)))
+    def open_member(self, member, decompress=None):
+        if decompress is None:
+            decompress = member.is_compressed
+
+        if decompress:
+            output_handle = StringIO()
+            self.COMPRESSION_ALGORITHM.decompress_stream(
+                _FileInFile(self, member._offset, member.stored_size), output_handle)
+            return output_handle
         else:
             return _FileInFile(self, member._offset, member.stored_size)
 
@@ -110,22 +115,22 @@ class BigFile(StructuredFile):
     def get_filenames(self):
         return [member.name for member in self.get_members()]
 
-    def extract(self, member, path=''):
+    def extract(self, member, path='', decompress=None):
         full_filename = os.path.join(path, member.name)
         try:
             os.makedirs(os.path.dirname(full_filename))
         except os.error:
             # leaf dir already exists (probably)
             pass
-        with self.open_member(member) as infile:
+        with self.open_member(member, decompress) as infile:
             with open(os.path.join(path, member.name), 'w') as outfile:
                 outfile.write(infile.read())
 
-    def extract_all(self, members=None, path=''):
+    def extract_all(self, members=None, path='', decompress=None):
         if members is None:
             members = self.get_members()
         for member in members:
-            self.extract(member, path)
+            self.extract(member, path, decompress)
 
     def add(self, filename): pass
     def add_file(self, fileobj): pass

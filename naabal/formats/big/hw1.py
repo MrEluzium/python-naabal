@@ -28,7 +28,7 @@ import os.path
 
 from naabal.errors import BigFormatException
 from naabal.util import timestamp_to_datetime, datetime_to_timestamp
-from naabal.util.lzss import LZSSDecompressor
+from naabal.util.lzss import LZSS
 from naabal.formats import StructuredFileSequence
 from naabal.formats.big import BigFile, BigSection, BigSequence, BigInfo
 
@@ -186,7 +186,7 @@ class HomeworldBigFile(BigFile):
     ]
 
     MIN_COMPRESSION_RATIO       = 0.950
-    COMPRESSION_ALGORITHM       = LZSSDecompressor()
+    COMPRESSION_ALGORITHM       = LZSS()
 
     def _read_filename(self, toc_entry):
         self.seek(toc_entry['entry_offset'])
