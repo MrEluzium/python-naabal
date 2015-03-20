@@ -106,7 +106,7 @@ class LZSSCompressor(LZSS):
 
                     current_position = MOD_WINDOW(current_position + 1)
                     if look_ahead_bytes:
-                        match_length = tree.add_string(current_position, match_position)
+                        match_length, match_position = tree.add_string(current_position, match_position)
 
             bit_writer.write_bit(0)
             bit_writer.write_bits(self.END_OF_STREAM, self.INDEX_BIT_COUNT)
@@ -201,6 +201,7 @@ class _LZSSTree(object):
 
     def replace_node(self, old_node, new_node):
         parent = self[old_node].parent
+
         if self[parent].smaller_child == old_node:
             self[parent].smaller_child = new_node
         else:
@@ -220,6 +221,7 @@ class _LZSSTree(object):
     def delete_string(self, p):
         if self[p].parent == LZSS.UNUSED:
             return
+
         if self[p].larger_child == LZSS.UNUSED:
             self.contract_node(p, self[p].smaller_child)
         elif self[p].smaller_child == LZSS.UNUSED:
@@ -231,7 +233,7 @@ class _LZSSTree(object):
 
     def add_string(self, new_node, match_position):
         if new_node == LZSS.END_OF_STREAM:
-            return 0
+            return (0, match_position)
 
         test_node = self[LZSS.TREE_ROOT].larger_child
         match_length = 0
@@ -245,21 +247,21 @@ class _LZSSTree(object):
 
             if i >= match_length:
                 match_length = i
-                match_position = test_node
+                match_position = test_node # !!
                 if match_length >= LZSS.LOOK_AHEAD_SIZE:
                     self.replace_node(test_node, new_node)
-                    return match_length
+                    return (match_length, match_position)
 
             if delta >= 0:
-                child = self[test_node].larger_child
+                child_attr = 'larger_child'
             else:
-                child = self[test_node].smaller_child
+                child_attr = 'smaller_child'
 
-            if child == LZSS.UNUSED:
-                child = new_node
+            if getattr(self[test_node], child_attr) == LZSS.UNUSED:
+                setattr(self[test_node], child_attr, new_node)
                 self[new_node].parent = test_node
                 self[new_node].larger_child = LZSS.UNUSED
                 self[new_node].smaller_child = LZSS.UNUSED
-                return match_length
+                return (match_length, match_position)
 
-            test_node = child
+            test_node = getattr(self[test_node], child_attr)
