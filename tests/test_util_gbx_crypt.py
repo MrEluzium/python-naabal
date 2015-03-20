@@ -113,7 +113,7 @@ miH++bOI9D1kQDXi/zNw41db/kKww+dq9N7Cw5CFXp/Cw3kZbDafYwo9wMi3Oc/CdxbKiLSQ7ylz
 X/WHV/cCweryuKZjR15roga0ZW7494Y=
 """.strip().decode('base64')
 
-class TestClass(unittest.TestCase):
+class TestUtilGbxCrypt(unittest.TestCase):
     def setUp(self):
         self.crypto = GearboxCrypt(len(TEST_DATA), TEST_LOCAL_KEY1, TEST_GLOBAL_KEY1)
 
