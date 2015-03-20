@@ -77,7 +77,7 @@ class LZSSCompressor(LZSS):
                 break
             window[current_position + i] = ord(c)
 
-        look_ahead_bytes = i
+        look_ahead_bytes = i + 1
         tree = _LZSSTree(current_position, window)
 
         with BitWriter(output_buffer) as bit_writer:
