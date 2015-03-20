@@ -1,54 +1,58 @@
 # @source http://rosettacode.org/wiki/Bitwise_IO#Python
 # @license http://www.gnu.org/licenses/fdl-1.2.html
 
-class BitWriter:
-    def __init__(self, f):
-        self.accumulator = 0
-        self.bcount = 0
-        self.out = f
+class BitIO(object):
+    BITS_IN_BYTE    = 8
 
-    def __del__(self):
+    def __init__(self, handle):
+        self._data_buffer = handle
+        self._reset()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, tb):
         self.flush()
 
-    def writebit(self, bit):
-        if self.bcount == 8 :
-            self.flush()
-        if bit > 0:
-            self.accumulator |= (1 << (7-self.bcount))
-        self.bcount += 1
-
-    def writebits(self, bits, n):
-        while n > 0:
-            self.writebit( bits & (1 << (n-1)) )
-            n -= 1
+    def _reset(self):
+        self._bit_buffer = 0x00
+        self._bit_count = 0
 
     def flush(self):
-        self.out.write(chr(self.accumulator))
-        self.accumulator = 0
-        self.bcount = 0
+        self._reset()
 
+class BitWriter(BitIO):
+    def write_bit(self, bit):
+        if self._bit_count == self.BITS_IN_BYTE:
+            self.flush()
+        if bit > 0:
+            self._bit_buffer |= (1 << (self.BITS_IN_BYTE - 1) - self._bit_count)
+        self._bit_count += 1
 
-class BitReader:
-    def __init__(self, f):
-        self.input = f
-        self.accumulator = 0
-        self.bcount = 0
-        self.read = 0
+    def write_bits(self, value, bit_count):
+        while bit_count > 0:
+            self.write_bit(value & (1 << (bit_count - 1)))
+            bit_count -= 1
 
-    def readbit(self):
-        if self.bcount == 0 :
-            a = self.input.read(1)
-            if ( len(a) > 0 ):
-                self.accumulator = ord(a)
-            self.bcount = 8
-            self.read = len(a)
-        rv = ( self.accumulator & ( 1 << (self.bcount-1) ) ) >> (self.bcount-1)
-        self.bcount -= 1
-        return rv
+    def flush(self):
+        if self._bit_count != 0:
+            self._data_buffer.write(chr(self._bit_buffer))
+        self._reset()
 
-    def readbits(self, n):
-        v = 0
-        while n > 0:
-            v = (v << 1) | self.readbit()
-            n -= 1
-        return v
+class BitReader(BitIO):
+    def read_bit(self):
+        if self._bit_count == 0:
+            c = self._data_buffer.read(1)
+            if len(c) != 0:
+                self._bit_buffer = ord(c)
+            self._bit_count = self.BITS_IN_BYTE
+        bit_value = (self._bit_buffer & (1 << (self._bit_count - 1))) >> (self._bit_count - 1)
+        self._bit_count -= 1
+        return bit_value
+
+    def read_bits(self, bit_count):
+        bits_value = 0x00
+        while bit_count > 0:
+            bits_value = (bits_value << 1) | self.read_bit()
+            bit_count -= 1
+        return bits_value
