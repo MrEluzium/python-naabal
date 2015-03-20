@@ -140,7 +140,7 @@ class LZSSDecompressor(LZSS):
                     match_length = bit_reader.read_bits(self.LENGTH_BIT_COUNT)
                     match_length += self.BREAK_EVEN
 
-                    for i in xrange(match_length):
+                    for i in xrange(match_length + 1):
                         c = window[MOD_WINDOW(match_position + i)]
                         output_buffer.write(chr(c))
                         window[current_position] = c
