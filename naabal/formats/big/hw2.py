@@ -28,7 +28,7 @@ import os.path
 from naabal.errors import BigFormatException
 from naabal.formats.big import BigSection, BigFile, BigSequence, BigInfo
 from naabal.util import crc32, datetime_to_timestamp, timestamp_to_datetime
-from naabal.util.zlib import ZLIB
+from naabal.util.zlib_wrapper import ZLIB
 
 
 MAX_FILENAME_LENGTH             = 256
