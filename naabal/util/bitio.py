@@ -17,6 +17,10 @@ class BitIO(object):
     def __exit__(self, type, value, tb):
         pass
 
+    @property
+    def index(self):
+        return self._bit_idx
+
 class BitWriter(BitIO):
     def __exit__(self, type, value, tb):
         self.flush()

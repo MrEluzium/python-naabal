@@ -22,11 +22,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__all__ = ['decompress', 'compress', 'LZSSCompressor', 'LZSSDecompressor']
+__all__ = ['decompress', 'compress', 'LZSS']
 
 import struct
-from cStringIO import StringIO
 
+from naabal.util import StringIO
 from naabal.util.bitio import BitReader, BitWriter
 
 
@@ -44,35 +44,14 @@ class LZSS(object):
     END_OF_STREAM           = 0x000
     UNUSED                  = 0
 
-    def __init__(self, handle):
-        self._buffer = handle
-        self._buffer_size = self._get_buffer_size()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, tb):
-        pass
-
-    def _get_buffer_size(self):
-        prev_pos =  self._buffer.tell()
-        self._buffer.seek(0, 2) # EOF
-        size = self._buffer.tell()
-        self._buffer.seek(prev_pos)
-        return size
-
-class LZSSCompressor(LZSS):
-    def compress_stream(self, output_buffer=None):
-        if output_buffer is None:
-            output_buffer = StringIO()
-
+    def compress_stream(self, input_buffer, output_buffer):
         current_position    = 1
         match_length        = 0
         match_position      = 0
         window = bytearray(self.WINDOW_SIZE)
 
         for i in xrange(self.LOOK_AHEAD_SIZE):
-            c = self._buffer.read(1)
+            c = input_buffer.read(1)
             if len(c) == 0:
                 break
             window[current_position + i] = ord(c)
@@ -97,7 +76,7 @@ class LZSSCompressor(LZSS):
 
                 for i in xrange(replace_count):
                     tree.delete_string(MOD_WINDOW(current_position + self.LOOK_AHEAD_SIZE))
-                    c = self._buffer.read(1)
+                    c = input_buffer.read(1)
 
                     if len(c) == 0:
                         look_ahead_bytes -= 1
@@ -107,25 +86,25 @@ class LZSSCompressor(LZSS):
                     current_position = MOD_WINDOW(current_position + 1)
                     if look_ahead_bytes:
                         match_length, match_position = tree.add_string(current_position, match_position)
-
+            # end while
             bit_writer.write_bit(0)
             bit_writer.write_bits(self.END_OF_STREAM, self.INDEX_BIT_COUNT)
+            size = bit_writer.index
 
-        return output_buffer
+        return size
 
-    def compress(self):
-        handle = self.compress_stream()
-        return handle.getvalue()
+    def compress(self, input_data):
+        input_handle = StringIO(input_data)
+        output_handle = StringIO()
+        self.compress_stream(input_handle, output_handle)
+        return output_handle.getvalue()
 
-class LZSSDecompressor(LZSS):
-    def decompress_stream(self, output_buffer=None):
-        if output_buffer is None:
-            output_buffer = StringIO()
-
+    def decompress_stream(self, input_buffer, output_buffer):
         current_position = 1
         window = bytearray(self.WINDOW_SIZE)
+        output_buffer_pos_start = output_buffer.tell()
 
-        with BitReader(self._buffer) as bit_reader:
+        with BitReader(input_buffer) as bit_reader:
             while True:
                 pass_through = bit_reader.read_bit()
                 if pass_through:
@@ -146,17 +125,19 @@ class LZSSDecompressor(LZSS):
                         window[current_position] = c
                         current_position = MOD_WINDOW(current_position + 1)
 
-        return output_buffer
+        return output_buffer.tell() - output_buffer_pos_start
 
-    def decompress(self):
-        handle = self.decompress_stream()
-        return handle.getvalue()
+    def decompress(self, input_data):
+        input_handle = StringIO(input_data)
+        output_handle = StringIO()
+        self.decompress_stream(input_handle, output_handle)
+        return output_handle.getvalue()
 
 def decompress(data):
-    return LZSSDecompressor(StringIO(data)).decompress()
+    return LZSS().decompress(data)
 
 def compress(data):
-    return LZSSCompressor(StringIO(data)).compress()
+    return LZSS().compress(data)
 
 class _LZSSTreeNode(object):
     parent = 0
