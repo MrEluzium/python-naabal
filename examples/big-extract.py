@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='big-extract.py',
         description='Extract contents of a .big file to a directory')
     parser.add_argument('-i', '--include-matching')
+    parser.add_argument('--no-decompress', action='store_false')
     parser.add_argument('filename')
     parser.add_argument('destination', default=os.getcwd(), nargs='?')
     args = parser.parse_args()
@@ -44,5 +45,5 @@ if __name__ == '__main__':
         else:
             member_list = bigfile.get_members()
         for member in member_list:
-            bigfile.extract(member, args.destination)
+            bigfile.extract(member, args.destination, args.no_decompress)
             print 'Extracted {size:8d} bytes: {name}'.format(size=member.real_size, name=member.name)

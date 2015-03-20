@@ -26,10 +26,11 @@
 import struct
 import os
 import os.path
+import shutil
 from tarfile import _FileInFile
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
-from naabal.util import StringIO
+from naabal.util import StringIO, datetime_to_timestamp
 from naabal.util.gbx_crypt import GearboxCrypt
 from naabal.errors import GearboxEncryptionException
 
@@ -90,17 +91,8 @@ class BigFile(StructuredFile):
             return False
         return True
 
-    def open_member(self, member, decompress=None):
-        if decompress is None:
-            decompress = member.is_compressed
-
-        if decompress:
-            output_handle = StringIO()
-            self.COMPRESSION_ALGORITHM.decompress_stream(
-                _FileInFile(self, member._offset, member.stored_size), output_handle)
-            return output_handle
-        else:
-            return _FileInFile(self, member._offset, member.stored_size)
+    def open_member(self, member):
+        return _FileInFile(self, member._offset, member.stored_size)
 
     def get_member(self, filename):
         for member in self.get_members():
@@ -115,18 +107,23 @@ class BigFile(StructuredFile):
     def get_filenames(self):
         return [member.name for member in self.get_members()]
 
-    def extract(self, member, path='', decompress=None):
+    def extract(self, member, path='', decompress=True):
         full_filename = os.path.join(path, member.name)
-        try:
-            os.makedirs(os.path.dirname(full_filename))
-        except os.error:
-            # leaf dir already exists (probably)
-            pass
-        with self.open_member(member, decompress) as infile:
-            with open(os.path.join(path, member.name), 'w') as outfile:
-                outfile.write(infile.read())
+        dir_name = os.path.dirname(full_filename)
+        mtime = datetime_to_timestamp(member.mtime)
 
-    def extract_all(self, members=None, path='', decompress=None):
+        if not os.path.isdir(dir_name):
+            os.makedirs(dir_name)
+
+        infile = self.open_member(member)
+        with open(full_filename, 'w') as outfile:
+            if decompress and member.is_compressed:
+                self.COMPRESSION_ALGORITHM.decompress_stream(infile, outfile)
+            else:
+                shutil.copyfileobj(infile, outfile)
+        os.utime(full_filename, (mtime, mtime))
+
+    def extract_all(self, members=None, path='', decompress=True):
         if members is None:
             members = self.get_members()
         for member in members:
