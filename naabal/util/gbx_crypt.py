@@ -34,13 +34,15 @@ class GearboxCrypt(object):
         self._key_size = len(local_key)
         self._encryption_key = self._combine_keys(local_key, global_key)
 
-    def decrypt(self, data, offset):
+    def decrypt(self, data, offset=0):
         data = bytearray(data)
         return ''.join(chr(CAST_TO_CHAR(c + self._encryption_key[(offset + i) % self._key_size])) \
             for i, c in izip(xrange(len(data)), data))
 
-    def encrypt(self, data, offset):
-        raise NotImplemented()
+    def encrypt(self, data, offset=0):
+        data = bytearray(data)
+        return ''.join(chr(CAST_TO_CHAR(c - self._encryption_key[(offset + i) % self._key_size])) \
+            for i, c in izip(xrange(len(data)), data))
 
     def _combine_keys(self, local_key, global_key):
         local_key = [COMBINE_BYTES(bytes) for bytes in split_by(local_key, 4)]
