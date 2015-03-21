@@ -27,7 +27,7 @@ import datetime
 import os.path
 
 from naabal.errors import BigFormatException
-from naabal.util import timestamp_to_datetime, datetime_to_timestamp
+from naabal.util import timestamp_to_datetime, datetime_to_timestamp, crc32
 from naabal.util.lzss import LZSS
 from naabal.formats import StructuredFileSequence
 from naabal.formats.big import BigFile, BigSection, BigSequence, BigInfo
@@ -191,6 +191,7 @@ class HomeworldBigFile(BigFile):
     def _read_filename(self, toc_entry):
         self.seek(toc_entry['entry_offset'])
         filename = self.read(toc_entry['name_length'] + 1)[:-1] # skip the null byte
+        filename = self._decode_filename(filename)
         filename = self._normalize_filename(filename)
         return filename
 
@@ -214,7 +215,6 @@ class HomeworldBigFile(BigFile):
         return str(filename)
 
     def _normalize_filename(self, filename):
-        filename = self._decode_filename(filename)
         filename = os.path.join(*filename.split('\\'))
         filename = os.path.normpath(filename)
         filename = filename.lower()
@@ -224,8 +224,19 @@ class HomeworldBigFile(BigFile):
         filename = filename.lower()
         filename = os.path.normpath(filename)
         filename = '\\'.join(filename.split(os.sep))
-        filename = self._encode_filename(filename)
         return filename
+
+    def _get_filename_crcs(self, decoded_filename):
+        """Compute the CRC32 checksums of the first and last halves of the un-encoded
+        (but not normalized) filename.
+
+        NOTE: There is an intentionally un-fixed bug, if the filename length is odd
+        then the last character is not included in the latter half checksum. Can't
+        fix it without breaking compatibility
+        """
+
+        half_len = len(decoded_filename) / 2
+        return (crc32(decoded_filename[:half_len]), crc32(decoded_filename[half_len:half_len*2]))
 
     def _get_members(self):
         members = []
