@@ -27,10 +27,9 @@ import struct
 import os
 import os.path
 import shutil
-from tarfile import _FileInFile
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
-from naabal.util import StringIO, datetime_to_timestamp
+from naabal.util import StringIO, datetime_to_timestamp, FileInFile
 from naabal.util.gbx_crypt import GearboxCrypt
 from naabal.errors import GearboxEncryptionException
 
@@ -92,7 +91,7 @@ class BigFile(StructuredFile):
         return True
 
     def open_member(self, member):
-        return _FileInFile(self, member._offset, member.stored_size)
+        return FileInFile(self, member._offset, member.stored_size)
 
     def get_member(self, filename):
         for member in self.get_members():
