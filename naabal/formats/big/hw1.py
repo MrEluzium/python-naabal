@@ -191,20 +191,40 @@ class HomeworldBigFile(BigFile):
     def _read_filename(self, toc_entry):
         self.seek(toc_entry['entry_offset'])
         filename = self.read(toc_entry['name_length'] + 1)[:-1] # skip the null byte
-        filename = self._decode_filename(filename)
         filename = self._normalize_filename(filename)
         return filename
 
     def _decode_filename(self, filename):
-        char_mask = 0xD5        # Game/bigfile.c:530 of HW1 source
-        decrypted_chars = []
-        for char in filename:
-            char_mask = char_mask ^ ord(char)
-            decrypted_chars.append(chr(char_mask))
-        return ''.join(decrypted_chars)
+        encoded_filename = bytearray(filename)
+        decoded_filename = bytearray(len(filename) + 1)
+        decoded_filename[0] = 0xD5 # Game/bigfile.c:530 of HW1 source
+        for i, byte in enumerate(encoded_filename):
+            decoded_filename[i+1] = decoded_filename[i] ^ byte
+        return str(decoded_filename[1:])
+
+    def _encode_filename(self, filename):
+        maskch = 0xD5
+        filename = bytearray(filename)
+
+        for i in range(len(filename)):
+            nextmask = filename[i]
+            filename[i] ^= maskch
+            maskch = nextmask
+
+        return str(filename)
 
     def _normalize_filename(self, filename):
+        filename = self._decode_filename(filename)
         filename = os.path.join(*filename.split('\\'))
+        filename = os.path.normpath(filename)
+        filename = filename.lower()
+        return filename
+
+    def _denormalize_filename(self, filename):
+        filename = filename.lower()
+        filename = os.path.normpath(filename)
+        filename = '\\'.join(filename.split(os.sep))
+        filename = self._encode_filename(filename)
         return filename
 
     def _get_members(self):
