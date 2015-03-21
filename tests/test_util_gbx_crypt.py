@@ -26,7 +26,7 @@
 import unittest
 
 from naabal.util.gbx_crypt import GearboxCrypt
-from naabal.util import unpack_key
+from naabal.util import unpack_key, StringIO
 
 TEST_GLOBAL_KEY1 = unpack_key("""
 T10lnVvi4j4Mwktma0CjvH969QKh8zTQj5juzGltVCyjjmoBPwFYuc2Fmx3/FNG2xylCFeDz+4+D
@@ -130,6 +130,12 @@ class TestUtilGbxCrypt(unittest.TestCase):
     def test_decrypt(self):
         self.assertEqual(TEST_DATA, self.crypto.decrypt(TEST_DATA_ENCRYPTED))
 
+    def test_decrypt_stream(self):
+        input_stream = StringIO(TEST_DATA_ENCRYPTED)
+        output_stream = StringIO()
+        self.crypto.decrypt_stream(input_stream, output_stream)
+        self.assertEqual(TEST_DATA, output_stream.getvalue())
+
     def test_partial_decrypt(self):
         partial_start = len(TEST_DATA) / 2
         partial_length = 25
@@ -141,6 +147,12 @@ class TestUtilGbxCrypt(unittest.TestCase):
 
     def test_encrypt(self):
         self.assertEqual(TEST_DATA_ENCRYPTED, self.crypto.encrypt(TEST_DATA))
+
+    def test_encrypt_stream(self):
+        input_stream = StringIO(TEST_DATA)
+        output_stream = StringIO()
+        self.crypto.encrypt_stream(input_stream, output_stream)
+        self.assertEqual(TEST_DATA_ENCRYPTED, output_stream.getvalue())
 
     def test_partial_encrypt(self):
         partial_start = len(TEST_DATA) / 2

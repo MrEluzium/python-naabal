@@ -34,7 +34,8 @@ from naabal.util.c_macros import COMBINE_BYTES, SPLIT_TO_BYTES, ROTL, CAST_TO_CH
 
 
 class GearboxCrypt(object):
-    def __init__(self, data_size, local_key, global_key):
+    def __init__(self, data_size, local_key, global_key, chunk_size=4 * 1024):
+        self._chunk_size = chunk_size
         self._data_size = data_size
         self._key_size = len(local_key)
         self._encryption_key = self._combine_keys(local_key, global_key)
@@ -43,15 +44,39 @@ class GearboxCrypt(object):
     def encryption_key(self):
         return self._encryption_key
 
+    def decrypt_stream(self, input_buffer, output_buffer, offset=0):
+        offset += input_buffer.tell()
+        chunk = input_buffer.read(self._chunk_size)
+        while chunk:
+            output_buffer.write(self.decrypt(chunk, offset))
+            offset += len(chunk)
+            chunk = input_buffer.read(self._chunk_size)
+        return output_buffer.tell()
+
     def decrypt(self, data, offset=0):
         data = bytearray(data)
-        return ''.join(chr(CAST_TO_CHAR(c + self._encryption_key[(offset + i) % self._key_size])) \
-            for i, c in izip(xrange(len(data)), data))
+        key_data = self._key_stream(len(data), offset)
+        return str(bytearray(0xFF & (c + k) for c, k in izip(data, key_data)))
+
+    def encrypt_stream(self, input_buffer, output_buffer, offset=0):
+        offset += input_buffer.tell()
+        chunk = input_buffer.read(self._chunk_size)
+        while chunk:
+            output_buffer.write(self.encrypt(chunk, offset))
+            offset += len(chunk)
+            chunk = input_buffer.read(self._chunk_size)
+        return output_buffer.tell()
 
     def encrypt(self, data, offset=0):
         data = bytearray(data)
-        return ''.join(chr(CAST_TO_CHAR(c - self._encryption_key[(offset + i) % self._key_size])) \
-            for i, c in izip(xrange(len(data)), data))
+        key_data = self._key_stream(len(data), offset)
+        return str(bytearray(0xFF & (c - k) for c, k in izip(data, key_data)))
+
+    def _key_stream(self, length, start_pos=0):
+        key = self._encryption_key
+        ks = self._key_size
+        for i in xrange(start_pos, start_pos + length):
+            yield key[i % ks]
 
     def _combine_keys(self, local_key, global_key):
         local_key = [COMBINE_BYTES(bytes) for bytes in split_by(local_key, 4)]
