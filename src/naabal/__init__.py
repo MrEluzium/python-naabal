@@ -30,3 +30,6 @@ __author_email__    = 'aheadley@waysaboutstuff.com'
 __license__         = 'The MIT License (MIT)'
 __copyright__       = 'Copyright 2015 Alex Headley'
 __url__             = 'https://github.com/aheadley/python-naabal'
+__description__     = """
+A library for working with data from the Homeworld game series
+""".strip()
