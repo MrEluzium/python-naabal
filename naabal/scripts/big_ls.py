@@ -48,7 +48,7 @@ def main():
         bigfile.load()
         for member in bigfile:
             if args.long:
-                sys.stdout.write('{0} {1:8d} +{2:8d} {3} {4}'.format(
+                sys.stdout.write('{0} {1:8d} +{2:8d} {3} {4}\n'.format(
                     'c' if member.is_compressed else 'N',
                     member.stored_size,
                     member.real_size - member.stored_size,
@@ -56,7 +56,7 @@ def main():
                     member.name
                 ))
             else:
-                print member.name
+                sys.stdout.write('{0}\n'.format(member.name))
     return 0
 
 if __name__ == '__main__':

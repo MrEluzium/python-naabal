@@ -48,7 +48,7 @@ def main():
             member_list = bigfile.get_members()
         for member in member_list:
             bigfile.extract(member, args.destination, args.no_decompress)
-            sys.stdout.write('Extracted {size:8d} bytes: {name}'.format(
+            sys.stdout.write('Extracted {size:8d} bytes: {name}\n'.format(
                 size=member.real_size, name=member.name))
     return 0
 
