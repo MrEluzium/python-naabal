@@ -23,14 +23,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import argparse
+import os
+import fnmatch
+import sys
+
 from naabal.util.helpers import big_open
 
-if __name__ == '__main__':
-    import argparse
-    import os
-    import fnmatch
 
-    parser = argparse.ArgumentParser(prog='big-extract.py',
+def main():
+    parser = argparse.ArgumentParser(prog='big-extract',
         description='Extract contents of a .big file to a directory')
     parser.add_argument('-i', '--include-matching')
     parser.add_argument('--no-decompress', action='store_false')
@@ -46,4 +48,9 @@ if __name__ == '__main__':
             member_list = bigfile.get_members()
         for member in member_list:
             bigfile.extract(member, args.destination, args.no_decompress)
-            print 'Extracted {size:8d} bytes: {name}'.format(size=member.real_size, name=member.name)
+            sys.stdout.write('Extracted {size:8d} bytes: {name}'.format(
+                size=member.real_size, name=member.name))
+    return 0
+
+if __name__ == '__main__':
+    main()

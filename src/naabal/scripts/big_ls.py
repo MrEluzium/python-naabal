@@ -23,23 +23,41 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import argparse
+import datetime
+import sys
 
-from naabal.formats.big.hwrm import HomeworldRemasteredBigFile
+from naabal.util.helpers import big_open
+
+
+NOW_YEAR = datetime.datetime.utcnow().year
+
+def format_mtime(mtime):
+    if mtime.year == NOW_YEAR:
+        return mtime.strftime('%b %d %H:%M')
+    else:
+        return mtime.strftime('%b %d  %Y')
+
+def main():
+    parser = argparse.ArgumentParser(prog='big-ls',
+        description='List contents of a .big file')
+    parser.add_argument('-l', '--long', action='store_true')
+    parser.add_argument('filename')
+    args = parser.parse_args()
+    with big_open(args.filename) as bigfile:
+        bigfile.load()
+        for member in bigfile:
+            if args.long:
+                sys.stdout.write('{0} {1:8d} +{2:8d} {3} {4}'.format(
+                    'c' if member.is_compressed else 'N',
+                    member.stored_size,
+                    member.real_size - member.stored_size,
+                    format_mtime(member.mtime),
+                    member.name
+                ))
+            else:
+                print member.name
+    return 0
 
 if __name__ == '__main__':
-    import argparse
-
-    parser = argparse.ArgumentParser(prog='big-decrypt.py',
-        description='Extract contents of a .big file to a directory')
-    parser.add_argument('-c', '--chunk-size', type=int, default=1024 * 4)
-    parser.add_argument('src_filename')
-    parser.add_argument('dest_filename')
-    args = parser.parse_args()
-
-    with HomeworldRemasteredBigFile(args.src_filename) as infile:
-        bigfile.load()
-        with open(args.dest_filename, 'w') as outfile:
-            chunk_size = args.chunk_size
-            data_size = infile.data_size
-            for i in xrange(0, data_size, chunk_size):
-                outfile.write(infile.read(chunk_size))
+    main()
