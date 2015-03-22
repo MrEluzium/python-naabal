@@ -23,7 +23,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# from distutils.core import setup
 from setuptools import setup, find_packages
 
 import naabal
@@ -57,8 +56,8 @@ SETUP_ARGS = {
     ],
 
     # setuptools info
-    'package_dir':      {'': 'src'},
-    'packages':         find_packages('src'),
+    # 'package_dir':      {'': 'src'},
+    'packages':         find_packages(),
     'entry_points':     {
         'console_scripts': [
             'big-ls             = naabal.scripts.big_ls:main',
@@ -66,6 +65,7 @@ SETUP_ARGS = {
             'big-decrypt        = naabal.scripts.big_decrypt:main',
         ],
     },
+    'test_suite':       'tests',
 }
 
 if __name__ == '__main__':
