@@ -57,7 +57,7 @@ class LZSS(object):
             window[current_position + i] = ord(c)
 
         look_ahead_bytes = i + 1
-        tree = _LZSSTree(current_position, window)
+        tree = LZSSTree(current_position, window)
 
         with BitWriter(output_buffer) as bit_writer:
             while look_ahead_bytes > 0:
@@ -139,7 +139,7 @@ def decompress(data):
 def compress(data):
     return LZSS().compress(data)
 
-class _LZSSTreeNode(object):
+class LZSSTreeNode(object):
     parent = 0
     smaller_child = 0
     larger_child = 0
@@ -152,12 +152,12 @@ class _LZSSTreeNode(object):
         self.smaller_child = source_node.smaller_child
         self.larger_child = source_node.larger_child
 
-class _LZSSTree(object):
+class LZSSTree(object):
     _data = None
 
     def __init__(self, root_idx, window):
         self._window = window
-        self._data = [_LZSSTreeNode() for i in xrange(LZSS.WINDOW_SIZE + 1)]
+        self._data = [LZSSTreeNode() for i in xrange(LZSS.WINDOW_SIZE + 1)]
         self[LZSS.TREE_ROOT].larger_child = root_idx
         self[root_idx].parent = LZSS.TREE_ROOT
         self[root_idx].larger_child = LZSS.UNUSED
