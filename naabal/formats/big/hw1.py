@@ -25,11 +25,11 @@
 
 import datetime
 import os.path
-import shutil
 
 from naabal.errors import BigFormatException
 from naabal.util import timestamp_to_datetime, datetime_to_timestamp, crc32
 from naabal.util.lzss import LZSS
+from naabal.util.file_io import chunked_copy
 from naabal.formats import StructuredFileSequence
 from naabal.formats.big import BigFile, BigSection, BigSequence, BigInfo
 
@@ -236,6 +236,7 @@ class HomeworldBigFile(BigFile):
         fix it without breaking compatibility
         """
 
+        decoded_filename = decoded_filename.lower()
         half_len = len(decoded_filename) / 2
         return (crc32(decoded_filename[:half_len]), crc32(decoded_filename[half_len:half_len*2]))
 
@@ -259,7 +260,8 @@ class HomeworldBigFile(BigFile):
 
         offset = self['header'].data_size + (len(sorted_members) * self['table_of_contents'].CHILD_TYPE.data_size)
 
-        max_file_size = offset + sum(len(m.name) + 1 + m.real_size for m in sorted_members)
+        max_data_size = sum(len(m.name) + 1 + m.real_size for m in sorted_members)
+        max_file_size = offset + max_data_size
 
         self.truncate(max_file_size)
 
@@ -272,6 +274,7 @@ class HomeworldBigFile(BigFile):
             toc_entry['data_real_size'] = member.real_size
             toc_entry['data_stored_size'] = member.stored_size
             toc_entry['timestamp'] = member.mtime
+            toc_entry['entry_offset'] = offset
 
             self.seek(offset)
             self.write(self._encode_filename(self._denormalize_filename(member.name)) + '\x00')
@@ -286,13 +289,15 @@ class HomeworldBigFile(BigFile):
             else:
                 self.seek(data_offset)
                 member_handle.seek(0)
-                shutil.copyfileobj(member_handle, self)
+                chunked_copy(member_handle.read, self.write)
 
             toc_entry['compression_flag'] = member.is_compressed
-            toc_entry['entry_offset'] = offset
             offset += len(member.name) + 1 + member.stored_size
             print 'Added file {2:4d}/{3:4d} [{0:8d} b]: {1}'.format(
                 member.stored_size, member.name, i + 1, member_count)
+
+        # cut the file off at the end of the data we wrote
+        self.truncate(offset)
 
         # write the header + toc
         super(HomeworldBigFile, self).save()
