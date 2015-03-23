@@ -22,13 +22,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import os.path
+import hashlib
 
 from naabal.errors import BigFormatException
 from naabal.formats.big import BigSection, BigFile, BigSequence, BigInfo
 from naabal.util import crc32, datetime_to_timestamp, timestamp_to_datetime
 from naabal.util.zlib_wrapper import ZLIB
+from naabal.util.file_io import FileInFile, chunked_copy
+from naabal.util.keys import RELIC_HW2_TOOL_SECURITY_KEY, RELIC_HW2_ROOT_SECURITY_KEY
 
 
 MAX_FILENAME_LENGTH             = 256
@@ -52,8 +54,8 @@ class Homeworld2BigArchiveHeader(BigSection):
             'read':     int,
             'write':    int,
         },
-        {
-            'key':      'md5_hash1',
+        {   # hash of the tool security key and rest of the file excluding this header
+            'key':      'tool_key_hash',
             'fmt':      'c',
             'len':      16,
             'default':  '\x00' * 16,
@@ -68,8 +70,8 @@ class Homeworld2BigArchiveHeader(BigSection):
             'read':     lambda v: v.decode('UTF-16-LE').replace('\x00', ''),
             'write':    lambda v: (v[:128] + ('\x00' * (128 - len(v)))).encode('UTF-16-LE'),
         },
-        {
-            'key':      'md5_hash2',
+        {   # hash of the root security key and the section header + section data
+            'key':      'root_key_hash',
             'fmt':      'c',
             'len':      16,
             'default':  '\x00' * 16,
@@ -385,6 +387,8 @@ class Homeworld2BigFile(BigFile):
         ('file_info',               Homeworld2BigFileInfoList),
     ]
 
+    ROOT_KEY                    = RELIC_HW2_ROOT_SECURITY_KEY
+    TOOL_KEY                    = RELIC_HW2_TOOL_SECURITY_KEY
     COMPRESSION_ALGORITHM       = ZLIB()
     MIN_BATCH_COMPRESSION_SIZE  = 4 * 1024 # 4KB
 
@@ -441,3 +445,16 @@ class Homeworld2BigFile(BigFile):
 
     def _get_full_filename(self, file_info_entry):
         return self._filename_map[self._data['file_info']._data_list.index(file_info_entry)]
+
+    def _get_tool_key_hash(self):
+        md5_hash = hashlib.md5(self.TOOL_KEY)
+        data_handle = FileInFile(self, self['archive_header'].data_size)
+        chunked_copy(data_handle.read, md5_hash.update)
+        return md5_hash.digest()
+
+    def _get_root_key_hash(self):
+        md5_hash = hashlib.md5(self.ROOT_KEY)
+        data_handle = FileInFile(self, self['archive_header'].data_size,
+            size=self['archive_header']['file_data_offset'] - self['archive_header'].data_size)
+        chunked_copy(data_handle.read, md5_hash.update)
+        return md5_hash.digest()
