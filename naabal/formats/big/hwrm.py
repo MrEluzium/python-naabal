@@ -30,7 +30,7 @@ from naabal.formats.big.hw1 import HomeworldBigHeader, HomeworldBigTocEntry, \
     HomeworldBigToc, HomeworldBigFile
 from naabal.formats.big.hw2 import Homeworld2BigFile
 from naabal.util import datetime_to_timestamp, timestamp_to_datetime
-from naabal.util.keys import GEARBOX_HOMEWORLD_REMASTERED_KEY
+from naabal.util.keys import GEARBOX_HWRM_GLOBAL_KEY
 
 
 class HomeworldClassicBigHeader(HomeworldBigHeader): pass
@@ -131,5 +131,5 @@ class HomeworldClassicBigFile(HomeworldBigFile):
 class Homeworld2ClassicBigFile(Homeworld2BigFile): pass
 
 class HomeworldRemasteredBigFile(GearboxEncryptedBigFile, Homeworld2BigFile):
-    MASTER_KEY                      = GEARBOX_HOMEWORLD_REMASTERED_KEY
+    MASTER_KEY                      = GEARBOX_HWRM_GLOBAL_KEY
     ENCRYPTION_KEY_MARKER           = 0xDEADBE7A
