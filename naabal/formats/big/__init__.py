@@ -26,10 +26,10 @@
 import struct
 import os
 import os.path
-import shutil
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
-from naabal.util import StringIO, datetime_to_timestamp, timestamp_to_datetime, FileInFile
+from naabal.util import StringIO, datetime_to_timestamp, timestamp_to_datetime
+from naabal.util.file_io import FileInFile, chunked_copy
 from naabal.util.gbx_crypt import GearboxCrypt
 from naabal.errors import GearboxEncryptionException
 
@@ -46,7 +46,7 @@ class BigInfo(object):
         self._bigfile = bigfile
 
     def open(self, mode='rb'):
-        return FileInFile(self._bigfile, self._offset, self.stored_size)
+        return FileInFile(self._bigfile, self._offset, self.stored_size, name=self.name)
 
     def load(self, data):
         raise NotImplemented()
@@ -135,7 +135,7 @@ class BigFile(StructuredFile):
         if decompress and member.is_compressed:
             self.COMPRESSION_ALGORITHM.decompress_stream(infile, fileobj)
         else:
-            shutil.copyfileobj(infile, fileobj)
+            chunked_copy(infile.read, fileobj.write)
 
     def extract(self, member, path='', decompress=True):
         full_filename = os.path.join(path, member.name)
