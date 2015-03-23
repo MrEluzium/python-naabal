@@ -63,6 +63,7 @@ SETUP_ARGS = {
             'big-ls             = naabal.scripts.big_ls:main',
             'big-extract        = naabal.scripts.big_extract:main',
             'big-decrypt        = naabal.scripts.big_decrypt:main',
+            'big-create         = naabal.scripts.big_create:main',
         ],
     },
     'test_suite':       'tests',

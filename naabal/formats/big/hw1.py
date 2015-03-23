@@ -25,6 +25,7 @@
 
 import datetime
 import os.path
+import shutil
 
 from naabal.errors import BigFormatException
 from naabal.util import timestamp_to_datetime, datetime_to_timestamp, crc32
@@ -32,6 +33,8 @@ from naabal.util.lzss import LZSS
 from naabal.formats import StructuredFileSequence
 from naabal.formats.big import BigFile, BigSection, BigSequence, BigInfo
 
+
+A_YEAR_IN_THE_FUTURE = datetime.datetime.utcnow() + datetime.timedelta(365)
 
 class HomeworldBigHeader(BigSection):
     MAX_TOC_ENTRIES     = 65535 # completely arbitrary
@@ -158,7 +161,7 @@ class HomeworldBigTocEntry(BigSection):
         if self['data_stored_size'] > self['data_real_size']:
             raise BigFormatException('Stored data size is larger than real size by %d bytes' %
                 (self['data_stored_size'] - self['data_real_size']))
-        if self['timestamp'] > datetime.datetime.utcnow():
+        if self['timestamp'] > A_YEAR_IN_THE_FUTURE:
             raise BigFormatException('Invalid timestamp: %s' % self['timestamp'])
         if self['compression_flag'] is not (self['data_stored_size'] < self['data_real_size']):
             raise BigFormatException('Data compression flag does not match data sizes: %s != (%d < %d)' %
@@ -217,11 +220,9 @@ class HomeworldBigFile(BigFile):
     def _normalize_filename(self, filename):
         filename = os.path.join(*filename.split('\\'))
         filename = os.path.normpath(filename)
-        filename = filename.lower()
         return filename
 
     def _denormalize_filename(self, filename):
-        filename = filename.lower()
         filename = os.path.normpath(filename)
         filename = '\\'.join(filename.split(os.sep))
         return filename
@@ -245,3 +246,53 @@ class HomeworldBigFile(BigFile):
             member.load(toc_entry)
             members.append(member)
         return members
+
+    def save(self):
+        crc_fix = lambda crc_start, crc_end: (crc_start << 32) | crc_end
+
+        sorted_members = sorted(self.get_members(), key=lambda m: \
+            crc_fix(*self._get_filename_crcs(self._denormalize_filename(m.name))))
+        member_count = len(sorted_members)
+        self['header']['toc_entry_count'] = len(sorted_members)
+        self['table_of_contents']._data_list = [self['table_of_contents'].CHILD_TYPE() \
+            for i in range(member_count)]
+
+        offset = self['header'].data_size + (len(sorted_members) * self['table_of_contents'].CHILD_TYPE.data_size)
+
+        max_file_size = offset + sum(len(m.name) + 1 + m.real_size for m in sorted_members)
+
+        self.truncate(max_file_size)
+
+        for i, member in enumerate(sorted_members):
+            crc_head, crc_tail = self._get_filename_crcs(self._denormalize_filename(member.name))
+            toc_entry = self['table_of_contents'][i]
+            toc_entry['name_crc_start'] = crc_head
+            toc_entry['name_crc_end'] = crc_tail
+            toc_entry['name_length'] = len(member.name)
+            toc_entry['data_real_size'] = member.real_size
+            toc_entry['data_stored_size'] = member.stored_size
+            toc_entry['timestamp'] = member.mtime
+
+            self.seek(offset)
+            self.write(self._encode_filename(self._denormalize_filename(member.name)) + '\x00')
+
+            data_offset = self.tell()
+            member_handle = member.open()
+            self.COMPRESSION_ALGORITHM.compress_stream(member_handle, self)
+            stored_size = self.tell() - data_offset
+            if (float(stored_size) / float(member.real_size)) < self.MIN_COMPRESSION_RATIO:
+                toc_entry['data_stored_size'] = stored_size
+                member._stored_size = stored_size
+            else:
+                self.seek(data_offset)
+                member_handle.seek(0)
+                shutil.copyfileobj(member_handle, self)
+
+            toc_entry['compression_flag'] = member.is_compressed
+            toc_entry['entry_offset'] = offset
+            offset += len(member.name) + 1 + member.stored_size
+            print 'Added file {2:4d}/{3:4d} [{0:8d} b]: {1}'.format(
+                member.stored_size, member.name, i + 1, member_count)
+
+        # write the header + toc
+        super(HomeworldBigFile, self).save()

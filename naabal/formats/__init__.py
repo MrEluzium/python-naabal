@@ -76,6 +76,9 @@ class StructuredFile(object):
     def __repr__(self):
         return repr(self._data)
 
+    def __getitem__(self, key):
+        return self._data.get(key)
+
     def close(self):
         handle = self._handle
         self._handle = None
@@ -111,7 +114,13 @@ class StructuredFile(object):
     def tell(self):
         return self._handle.tell()
 
-    def truncate(self, size=None): pass
+    def truncate(self, size=None):
+        # if size is None:
+        #     size = self.tell()
+        # if size != 0:
+        #     self.seek(size - 1)
+        #     self.write('\x00')
+        self._handle.truncate(size)
 
     def write(self, data):
         return self._handle.write(data)
@@ -127,7 +136,6 @@ class StructuredFile(object):
         self.check()
 
     def save(self):
-        raise NotImplemented()
         self.seek(0)
         for key, member_type in self.STRUCTURE:
             self._data[key].save(self)
@@ -153,7 +161,8 @@ class StructuredFileSection(object):
         return self._data.get(key)
 
     def __setitem__(self, key, value):
-        return self._data.set(key, value)
+        # return self._data.set(key, value)
+        self._data[key] = value
 
     def __iter__(self):
         return iter(self.keys)
@@ -203,9 +212,14 @@ class StructuredFileSection(object):
 
     def save(self, handle):
         self.check()
-        packed_data = struct.pack(self.data_format,
-            *(m['write'](self._data[m['key']]) for m in self.STRUCTURE))
-        handle.write(packed_data)
+        unpacked_data = []
+        for struct_m in self.STRUCTURE:
+            if struct_m['len'] > 1:
+                unpacked_data += struct_m['write'](self._data[struct_m['key']])
+            else:
+                unpacked_data += [struct_m['write'](self._data[struct_m['key']])]
+
+        handle.write(struct.pack(self.data_format, *unpacked_data))
 
     def check(self):
         return True

@@ -29,7 +29,7 @@ import os.path
 import shutil
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
-from naabal.util import StringIO, datetime_to_timestamp, FileInFile
+from naabal.util import StringIO, datetime_to_timestamp, timestamp_to_datetime, FileInFile
 from naabal.util.gbx_crypt import GearboxCrypt
 from naabal.errors import GearboxEncryptionException
 
@@ -44,6 +44,9 @@ class BigInfo(object):
 
     def __init__(self, bigfile):
         self._bigfile = bigfile
+
+    def open(self, mode='rb'):
+        return FileInFile(self._bigfile, self._offset, self.stored_size)
 
     def load(self, data):
         raise NotImplemented()
@@ -68,6 +71,27 @@ class BigInfo(object):
     def stored_size(self):
         return self._stored_size
 
+class ExternalBigInfo(BigInfo):
+    def open(self, mode='rb'):
+        return open(self._real_filename, mode)
+
+    def load(self, file, alt_filename=None):
+        if hasattr(file, 'read'):
+            real_filename = file.name
+        else:
+            real_filename = file
+
+        if alt_filename is None:
+            alt_filename = filename
+        self._real_filename = real_filename
+
+        fstat = os.stat(real_filename)
+        self._offset         = 0
+        self._name           = alt_filename
+        self._mtime          = timestamp_to_datetime(fstat.st_mtime)
+        self._real_size      = fstat.st_size
+        self._stored_size    = fstat.st_size
+
 class BigFile(StructuredFile):
     _members        = []
 
@@ -90,8 +114,8 @@ class BigFile(StructuredFile):
             return False
         return True
 
-    def open_member(self, member):
-        return FileInFile(self, member._offset, member.stored_size)
+    def open_member(self, member, mode='rb'):
+        return member.open(mode)
 
     def get_member(self, filename):
         for member in self.get_members():
@@ -106,6 +130,13 @@ class BigFile(StructuredFile):
     def get_filenames(self):
         return [member.name for member in self.get_members()]
 
+    def extract_file(self, member, fileobj, decompress=True):
+        infile = self.open_member(member)
+        if decompress and member.is_compressed:
+            self.COMPRESSION_ALGORITHM.decompress_stream(infile, fileobj)
+        else:
+            shutil.copyfileobj(infile, fileobj)
+
     def extract(self, member, path='', decompress=True):
         full_filename = os.path.join(path, member.name)
         dir_name = os.path.dirname(full_filename)
@@ -114,12 +145,8 @@ class BigFile(StructuredFile):
         if not os.path.isdir(dir_name):
             os.makedirs(dir_name)
 
-        infile = self.open_member(member)
-        with open(full_filename, 'w') as outfile:
-            if decompress and member.is_compressed:
-                self.COMPRESSION_ALGORITHM.decompress_stream(infile, outfile)
-            else:
-                shutil.copyfileobj(infile, outfile)
+        with open(full_filename, 'wb') as outfile:
+            self.extract_file(member, outfile, decompress)
         os.utime(full_filename, (mtime, mtime))
 
     def extract_all(self, members=None, path='', decompress=True):
@@ -128,8 +155,26 @@ class BigFile(StructuredFile):
         for member in members:
             self.extract(member, path, decompress)
 
-    def add(self, filename): pass
-    def add_file(self, fileobj): pass
+    def add_file(self, fileobj):
+        self.add(self.get_biginfo(fileobj))
+
+    def add(self, biginfo):
+        self._members.append(biginfo)
+
+    def add_all(self, path='', exclude=None):
+        if exclude is None:
+            exclude = lambda fn: False
+
+        for dirpath, dirnames, filenames in os.walk(path, topdown=False):
+            for filename in (os.path.join(dirpath, fn) for fn in filenames):
+                if not exclude(filename):
+                    partial_filename = filename.replace(path, '', 1)
+                    self.add(self.get_biginfo(filename, alt_filename=partial_filename))
+
+    def get_biginfo(self, filename, alt_filename=None):
+        big_info = ExternalBigInfo(self)
+        big_info.load(filename, alt_filename)
+        return big_info
 
     def _get_members(self):
         raise NotImplemented()
