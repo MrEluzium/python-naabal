@@ -105,7 +105,7 @@ class StructuredFile(object):
     def next(self):
         raise StopIteration()
 
-    def read(self, size=None):
+    def read(self, size=-1):
         return self._handle.read(size)
 
     def seek(self, offset, whence=os.SEEK_SET):
@@ -115,11 +115,8 @@ class StructuredFile(object):
         return self._handle.tell()
 
     def truncate(self, size=None):
-        # if size is None:
-        #     size = self.tell()
-        # if size != 0:
-        #     self.seek(size - 1)
-        #     self.write('\x00')
+        if size is None:
+            size = self.tell()
         self._handle.truncate(size)
 
     def write(self, data):
