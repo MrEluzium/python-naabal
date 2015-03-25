@@ -22,12 +22,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import struct
 import os
+import logging
 
 from naabal.util import classproperty, split_by
 from naabal.errors import StructuredFileFormatException
+
+logger = logging.getLogger('naabal.formats')
 
 class StructuredFile(object):
     STRUCTURE = []
@@ -59,7 +61,7 @@ class StructuredFile(object):
     def newlines(self):
         return None
 
-    def __init__(self, filename, mode='r'):
+    def __init__(self, filename, mode='rb'):
         handle = open(filename, mode)
         self._mode = mode
         self._closed = False
@@ -74,7 +76,7 @@ class StructuredFile(object):
         self.close()
 
     def __repr__(self):
-        return repr(self._data)
+        return '<{0}({1})>'.format(self.__class__.__name__, repr(self._handle))
 
     def __getitem__(self, key):
         return self._data.get(key)
@@ -128,13 +130,17 @@ class StructuredFile(object):
         # to data that should already be loaded and with a comprehension it isn't
         # assigned to _data until after load() finishes
         self._data = {}
+        logger.debug('Loading structured file: %r', self)
         for key, member_type in self.STRUCTURE:
+            logger.debug('Loading [%s] as a: %s', key, member_type)
             self._data[key] = member_type(self)
         self.check()
 
     def save(self):
         self.seek(0)
+        logger.debug('Saving structured file: %r', self)
         for key, member_type in self.STRUCTURE:
+            logger.debug('Saving [%s] as a: %s', key, member_type)
             self._data[key].save(self)
 
     def check(self):
@@ -158,7 +164,6 @@ class StructuredFileSection(object):
         return self._data.get(key)
 
     def __setitem__(self, key, value):
-        # return self._data.set(key, value)
         self._data[key] = value
 
     def __iter__(self):
@@ -196,14 +201,24 @@ class StructuredFileSection(object):
 
     def load(self, handle):
         self._data = {}
+        logger.debug('Reading %d bytes at offset %d for format: %s',
+            self.data_size, handle.tell(), self.data_format)
         unpacked_data = self.unpack(handle.read(self.data_size))
         idx = 0
         for member in self.STRUCTURE:
             if member['len'] == 1:
-                self._data[member['key']] = member['read'](unpacked_data[idx])
+                member_data = unpacked_data[idx]
             else:
-                self._data[member['key']] = \
-                    member['read'](unpacked_data[idx:idx+member['len']])
+                member_data = unpacked_data[idx:idx+member['len']]
+            try:
+                parsed_member_data = member['read'](member_data)
+            except Exception as err:
+                logger.error('Failed to parse member [%s] from data: %r',
+                    member['key'], member_data)
+                logger.exception(err)
+                raise StructuredFileFormatException(err)
+            self._data[member['key']] = parsed_member_data
+            logger.debug('Loaded member data: [%s] => %r', member['key'], parsed_member_data)
             idx += member['len']
         self.check()
 
@@ -239,7 +254,7 @@ class StructuredFileSequence(object):
 
     def __setitem__(self, key, value):
         if not issubclass(value.__class__, self.CHILD_TYPE):
-            raise ValueError()
+            raise ValueError(value)
         return self._data_list.set(key, value)
 
     def __iter__(self):
@@ -252,10 +267,14 @@ class StructuredFileSequence(object):
         return len(self._data_list)
 
     def load(self, handle):
+        logger.debug('Loading %d sections of type: %r',
+            self._get_expected_length(handle), self.CHILD_TYPE)
         self._data_list = [self.CHILD_TYPE(handle) \
             for i in xrange(self._get_expected_length(handle))]
 
     def save(self, handle):
+        logger.debug('Saving %d sections of type: %r',
+            self._get_expected_length(handle), self.CHILD_TYPE)
         for child in self._data_list:
             child.save(handle)
 

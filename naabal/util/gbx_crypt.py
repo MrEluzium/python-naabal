@@ -28,13 +28,16 @@ try:
 except ImportError:
     # py3k
     izip = zip
+import logging
 
 from naabal.util import split_by
 from naabal.util.c_macros import COMBINE_BYTES, SPLIT_TO_BYTES, ROTL, CAST_TO_CHAR
 
+logger = logging.getLogger('naabal.util.gbx_crypt')
 
 class GearboxCrypt(object):
     def __init__(self, data_size, local_key, global_key, chunk_size=4 * 1024):
+        logger.debug('Setting up crypto for data size: %d', data_size)
         self._chunk_size = chunk_size
         self._data_size = data_size
         self._key_size = len(local_key)
@@ -45,13 +48,15 @@ class GearboxCrypt(object):
         return self._encryption_key
 
     def decrypt_stream(self, input_buffer, output_buffer, offset=0):
-        offset += input_buffer.tell()
+        start_pos = input_buffer.tell()
+        offset += start_pos
         chunk = input_buffer.read(self._chunk_size)
         while chunk:
             output_buffer.write(self.decrypt(chunk, offset))
             offset += len(chunk)
             chunk = input_buffer.read(self._chunk_size)
-        return output_buffer.tell()
+        logger.debug('Decrypted %d bytes', input_buffer.tell() - start_pos)
+        return input_buffer.tell() - start_pos
 
     def decrypt(self, data, offset=0):
         data = bytearray(data)
@@ -59,13 +64,15 @@ class GearboxCrypt(object):
         return str(bytearray(0xFF & (c + k) for c, k in izip(data, key_data)))
 
     def encrypt_stream(self, input_buffer, output_buffer, offset=0):
-        offset += input_buffer.tell()
+        start_pos = input_buffer.tell()
+        offset += start_pos
         chunk = input_buffer.read(self._chunk_size)
         while chunk:
             output_buffer.write(self.encrypt(chunk, offset))
             offset += len(chunk)
             chunk = input_buffer.read(self._chunk_size)
-        return output_buffer.tell()
+        logger.debug('Encrypted %d bytes', input_buffer.tell() - start_pos)
+        return input_buffer.tell() - start_pos
 
     def encrypt(self, data, offset=0):
         data = bytearray(data)
@@ -79,6 +86,7 @@ class GearboxCrypt(object):
             yield key[i % ks]
 
     def _combine_keys(self, local_key, global_key):
+        logger.debug('Creating combined key from local key of %d bytes', len(local_key))
         local_key = [COMBINE_BYTES(bytes) for bytes in split_by(local_key, 4)]
         global_key = [COMBINE_BYTES(bytes) for bytes in split_by(global_key, 4)]
         combined_key = bytearray(self._key_size)
@@ -90,4 +98,5 @@ class GearboxCrypt(object):
                 for j in range(4):
                     c = global_key[CAST_TO_CHAR(c ^ bytes[j])] ^ (c >> 8)
                 combined_key[i + b] = CAST_TO_CHAR(c)
+        logger.debug('Created combined key: %s', str(combined_key).encode('hex'))
         return combined_key

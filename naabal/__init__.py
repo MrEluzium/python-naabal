@@ -22,6 +22,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+import logging
+
+from naabal.util import NullHandler, LOG_FORMAT
 
 __title__           = 'naabal'
 __version__         = '0.0.1'
@@ -33,3 +37,16 @@ __url__             = 'https://github.com/aheadley/python-naabal'
 __description__     = """
 A library for working with data from the Homeworld game series
 """.strip()
+
+logger = logging.getLogger(__title__)
+
+if os.environ.get('NAABAL_DEBUG', False):
+    _log_handler = logging.StreamHandler()
+    _log_handler.setFormatter(LOG_FORMAT)
+    _log_level = logging.DEBUG
+else:
+    _log_handler = NullHandler()
+    _log_level = logging.WARN
+
+logger.setLevel(_log_level)
+logger.addHandler(_log_handler)

@@ -22,14 +22,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import datetime
+import hashlib
 
 from naabal.formats.big import GearboxEncryptedBigFile
 from naabal.formats.big.hw1 import HomeworldBigHeader, HomeworldBigTocEntry, \
     HomeworldBigToc, HomeworldBigFile
 from naabal.formats.big.hw2 import Homeworld2BigFile
 from naabal.util import datetime_to_timestamp, timestamp_to_datetime
+from naabal.util.file_io import chunked_copy, FileInFile
 from naabal.util.keys import GEARBOX_HWRM_GLOBAL_KEY
 
 

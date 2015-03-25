@@ -22,9 +22,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import datetime
 import os.path
+import logging
 
 from naabal.errors import BigFormatException
 from naabal.util import timestamp_to_datetime, datetime_to_timestamp, crc32
@@ -33,6 +33,7 @@ from naabal.util.file_io import chunked_copy
 from naabal.formats import StructuredFileSequence
 from naabal.formats.big import BigFile, BigSection, BigSequence, BigInfo
 
+logger = logging.getLogger('naabal.formats.big.hw1')
 
 A_YEAR_IN_THE_FUTURE = datetime.datetime.utcnow() + datetime.timedelta(365)
 
@@ -238,7 +239,10 @@ class HomeworldBigFile(BigFile):
 
         decoded_filename = decoded_filename.lower()
         half_len = len(decoded_filename) / 2
-        return (crc32(decoded_filename[:half_len]), crc32(decoded_filename[half_len:half_len*2]))
+        crcs = (crc32(decoded_filename[:half_len]), crc32(decoded_filename[half_len:half_len*2]))
+        logger.debug('Calculated CRC32s for filename: %s -> (0x%08X, 0x%08X)',
+            decoded_filename, *crcs)
+        return crcs
 
     def _get_members(self):
         members = []
@@ -249,19 +253,24 @@ class HomeworldBigFile(BigFile):
         return members
 
     def save(self):
+        logger.info('Writing bigfile: %r', self)
         crc_fix = lambda crc_start, crc_end: (crc_start << 32) | crc_end
 
         sorted_members = sorted(self.get_members(), key=lambda m: \
             crc_fix(*self._get_filename_crcs(self._denormalize_filename(m.name))))
         member_count = len(sorted_members)
+        logger.debug('Found %d members to write', member_count)
         self['header']['toc_entry_count'] = len(sorted_members)
         self['table_of_contents']._data_list = [self['table_of_contents'].CHILD_TYPE() \
             for i in range(member_count)]
 
         offset = self['header'].data_size + (len(sorted_members) * self['table_of_contents'].CHILD_TYPE.data_size)
+        logger.debug('Preparing to start writing member data at offset: %d', offset)
 
         max_data_size = sum(len(m.name) + 1 + m.real_size for m in sorted_members)
         max_file_size = offset + max_data_size
+        logger.debug('Truncating file to max possible size: %d (%d + %d)',
+            max_file_size, offset, max_data_size)
 
         self.truncate(max_file_size)
 
@@ -277,27 +286,38 @@ class HomeworldBigFile(BigFile):
             toc_entry['entry_offset'] = offset
 
             self.seek(offset)
+            logger.debug('Writing encoded filename ("%s") at offset: %d',
+                member.name, offset)
             self.write(self._encode_filename(self._denormalize_filename(member.name)) + '\x00')
 
             data_offset = self.tell()
-            member_handle = member.open()
-            self.COMPRESSION_ALGORITHM.compress_stream(member_handle, self)
-            stored_size = self.tell() - data_offset
-            if (float(stored_size) / float(member.real_size)) < self.MIN_COMPRESSION_RATIO:
-                toc_entry['data_stored_size'] = stored_size
-                member._stored_size = stored_size
-            else:
-                self.seek(data_offset)
-                member_handle.seek(0)
-                chunked_copy(member_handle.read, self.write)
+
+            with self.open_member(member) as member_handle:
+                self.COMPRESSION_ALGORITHM.compress_stream(member_handle, self)
+                stored_size = self.tell() - data_offset
+                logger.debug('Wrote %d bytes (compressed) of file data at offset: %d',
+                    stored_size, data_offset)
+                compression_ratio = float(stored_size) / float(member.real_size)
+                if compression_ratio < self.MIN_COMPRESSION_RATIO:
+                    toc_entry['data_stored_size'] = stored_size
+                    member._stored_size = stored_size
+                else:
+                    logger.debug('Data did not compress enough: %03.2f %%', compression_ratio * 100.0)
+                    self.seek(data_offset)
+                    member_handle.seek(0)
+                    stored_size = chunked_copy(member_handle.read, self.write)
+                    logger.debug('Wrote %d bytes (uncompressed) of file data at offset: %d',
+                        stored_size, data_offset)
 
             toc_entry['compression_flag'] = member.is_compressed
             offset += len(member.name) + 1 + member.stored_size
-            print 'Added file {2:4d}/{3:4d} [{0:8d} b]: {1}'.format(
-                member.stored_size, member.name, i + 1, member_count)
+
+            logger.info('Wrote member %4d/%4d [%8d b]: %s',
+                i+1, member_count, member.stored_size, member.name)
 
         # cut the file off at the end of the data we wrote
         self.truncate(offset)
+        logger.debug('Truncating file to last written offset: %d', offset)
 
         # write the header + toc
         super(HomeworldBigFile, self).save()

@@ -22,10 +22,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 import struct
 import os
 import os.path
+import logging
 
 from naabal.formats import StructuredFile, StructuredFileSection, StructuredFileSequence
 from naabal.util import StringIO, datetime_to_timestamp, timestamp_to_datetime
@@ -33,6 +33,7 @@ from naabal.util.file_io import FileInFile, chunked_copy
 from naabal.util.gbx_crypt import GearboxCrypt
 from naabal.errors import GearboxEncryptionException
 
+logger = logging.getLogger('naabal.formats.big')
 
 class BigInfo(object):
     _bigfile        = None
@@ -44,6 +45,9 @@ class BigInfo(object):
 
     def __init__(self, bigfile):
         self._bigfile = bigfile
+
+    def __repr__(self):
+        return '<{0}("{1}")>'.format(self.__class__.__name__, self.name)
 
     def open(self, mode='rb'):
         return FileInFile(self._bigfile, self._offset, self.stored_size, name=self.name)
@@ -84,6 +88,7 @@ class ExternalBigInfo(BigInfo):
         if alt_filename is None:
             alt_filename = filename
         self._real_filename = real_filename
+        logger.debug('Loading metadata for (%s) from: %s', alt_filename, real_filename)
 
         fstat = os.stat(real_filename)
         self._offset         = 0
@@ -115,14 +120,16 @@ class BigFile(StructuredFile):
         return True
 
     def open_member(self, member, mode='rb'):
-        return member.open(mode)
+        handle = member.open(mode)
+        logger.debug('Opened member [%r] in mode "%s" as: %r', member, mode, handle)
+        return handle
 
     def get_member(self, filename):
         for member in self.get_members():
             if member.name == filename:
                 return member
         else:
-            raise KeyError()
+            raise KeyError(filename)
 
     def get_members(self):
         return self._members
@@ -131,11 +138,13 @@ class BigFile(StructuredFile):
         return [member.name for member in self.get_members()]
 
     def extract_file(self, member, fileobj, decompress=True):
-        infile = self.open_member(member)
-        if decompress and member.is_compressed:
-            self.COMPRESSION_ALGORITHM.decompress_stream(infile, fileobj)
-        else:
-            chunked_copy(infile.read, fileobj.write)
+        with self.open_member(member) as infile:
+            if decompress and member.is_compressed:
+                logger.debug('Extracting and decompressing member: %r', member)
+                self.COMPRESSION_ALGORITHM.decompress_stream(infile, fileobj)
+            else:
+                chunked_copy(infile.read, fileobj.write)
+            logger.info('Extracted %r to %r', infile, fileobj)
 
     def extract(self, member, path='', decompress=True):
         full_filename = os.path.join(path, member.name)
@@ -159,17 +168,23 @@ class BigFile(StructuredFile):
         self.add(self.get_biginfo(fileobj))
 
     def add(self, biginfo):
+        logger.info('Adding member to archive: %r', biginfo)
         self._members.append(biginfo)
 
     def add_all(self, path='', exclude=None):
         if exclude is None:
             exclude = lambda fn: False
 
+        logger.debug('Walking path: %s', path)
         for dirpath, dirnames, filenames in os.walk(path, topdown=False):
+            logger.debug('Found %d files in dir: %s', len(filenames), dirpath)
             for filename in (os.path.join(dirpath, fn) for fn in filenames):
                 if not exclude(filename):
                     partial_filename = filename.replace(path, '', 1)
+                    logger.info('Adding file as: %s => %s', filename, partial_filename)
                     self.add(self.get_biginfo(filename, alt_filename=partial_filename))
+                else:
+                    logger.debug('Excluding file: %s', filename)
 
     def get_biginfo(self, filename, alt_filename=None):
         big_info = ExternalBigInfo(self)
@@ -195,6 +210,8 @@ class GearboxEncryptedBigFile(BigFile):
 
     def load(self):
         self._crypto = self._load_encryption()
+        self._real_handle = self._handle
+        self._handle = FileInFile(self._real_handle, 0, self.data_size)
         super(GearboxEncryptedBigFile, self).load()
 
     def check_format(self):
@@ -217,7 +234,7 @@ class GearboxEncryptedBigFile(BigFile):
                     size = self.data_size - cur_pos
                 else:
                     if cur_pos + size > self.data_size:
-                        raise IOError('Attempted to read past end of encryption')
+                        size = self.data_size - cur_pos
                 return self._read_encrypted(size)
             else:
                 return self._handle.read(size)
@@ -230,12 +247,16 @@ class GearboxEncryptedBigFile(BigFile):
         self.seek(-4, os.SEEK_END)
         last_int_loc = self.tell()
         marker_offset = struct.unpack('<L', self._handle.read(4))[0]
+        logger.debug('Read marker offset: %d [0x%08X]', marker_offset, marker_offset)
         if marker_offset < (last_int_loc - 6):
             self.seek(-marker_offset, os.SEEK_CUR)
             encrypted_data_size = self.tell()
             marker = struct.unpack('<L', self._handle.read(4))[0]
+            logger.debug('Read marker as: 0x%08X', marker)
             if marker == self.ENCRYPTION_KEY_MARKER:
                 encryption_key_bytes = struct.unpack('<H', self._handle.read(2))[0]
+                logger.debug('Read local encryption key length as: %d [0x%08X]',
+                    encryption_key_bytes, encryption_key_bytes)
                 if encryption_key_bytes <= self.ENCRYPTION_KEY_MAX_SIZE:
                     local_encryption_key = bytearray(self._handle.read(encryption_key_bytes))
                     return GearboxCrypt(encrypted_data_size, local_encryption_key, self.MASTER_KEY)

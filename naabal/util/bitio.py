@@ -1,6 +1,10 @@
 # @source http://rosettacode.org/wiki/Bitwise_IO#Python
 # @license http://www.gnu.org/licenses/fdl-1.2.html
 
+import logging
+
+logger = logging.getLogger('naabal.util.bitio')
+
 class BitIO(object):
     BITS_IN_BYTE    = 8
     DEFAULT_MASK    = 1 << (BITS_IN_BYTE - 1) # 0x80

@@ -24,14 +24,17 @@
 
 import os.path
 import hashlib
+import logging
 
 from naabal.errors import BigFormatException
 from naabal.formats.big import BigSection, BigFile, BigSequence, BigInfo
-from naabal.util import crc32, datetime_to_timestamp, timestamp_to_datetime
+from naabal.util import crc32, datetime_to_timestamp, timestamp_to_datetime, \
+    pad_null_string, trim_null_string
 from naabal.util.zlib_wrapper import ZLIB
 from naabal.util.file_io import FileInFile, chunked_copy
 from naabal.util.keys import RELIC_HW2_TOOL_SECURITY_KEY, RELIC_HW2_ROOT_SECURITY_KEY
 
+logger = logging.getLogger('naabal.formats.big.hw2')
 
 MAX_FILENAME_LENGTH             = 256
 
@@ -67,8 +70,8 @@ class Homeworld2BigArchiveHeader(BigSection):
             'fmt':      '128s',
             'len':      1,
             'default':  'DataArchive',
-            'read':     lambda v: v.decode('UTF-16-LE').replace('\x00', ''),
-            'write':    lambda v: (v[:128] + ('\x00' * (128 - len(v)))).encode('UTF-16-LE'),
+            'read':     lambda v: trim_null_string(v.decode('UTF-16-LE')),
+            'write':    lambda v: pad_null_string(v, 128).encode('UTF-16-LE'),
         },
         {   # hash of the root security key and the section header + section data
             'key':      'root_key_hash',
@@ -176,16 +179,16 @@ class Homeworld2BigTocEntry(BigSection):
             'fmt':      '64s',
             'len':      1,
             'default':  '',
-            'read':     lambda v: v.replace('\x00', ''),
-            'write':    str,
+            'read':     trim_null_string,
+            'write':    lambda v: pad_null_string(v, 64),
         },
         {
             'key':      'filename',
             'fmt':      '64s',
             'len':      1,
             'default':  '',
-            'read':     lambda v: v.replace('\x00', ''),
-            'write':    str,
+            'read':     trim_null_string,
+            'write':    lambda v: pad_null_string(v, 64),
         },
         {
             'key':      'first_folder_idx',
@@ -342,8 +345,8 @@ class Homeworld2BigFileEntry(BigSection):
             'fmt':      str(MAX_FILENAME_LENGTH)+'s',
             'len':      1,
             'default':  '',
-            'read':     str,
-            'write':    str,
+            'read':     trim_null_string,
+            'write':    lambda v: pad_null_string(v, MAX_FILENAME_LENGTH),
         },
         {
             'key':      'timestamp',
@@ -448,8 +451,9 @@ class Homeworld2BigFile(BigFile):
 
     def _get_tool_key_hash(self):
         md5_hash = hashlib.md5(self.TOOL_KEY)
-        data_handle = FileInFile(self, self['archive_header'].data_size)
-        chunked_copy(data_handle.read, md5_hash.update)
+        self.seek(self['archive_header'].data_size)
+        chunked_copy(self.read, md5_hash.update)
+        logger.debug('Calculated tool key hash as: %s', md5_hash.hexdigest())
         return md5_hash.digest()
 
     def _get_root_key_hash(self):
@@ -457,4 +461,5 @@ class Homeworld2BigFile(BigFile):
         data_handle = FileInFile(self, self['archive_header'].data_size,
             size=self['archive_header']['file_data_offset'] - self['archive_header'].data_size)
         chunked_copy(data_handle.read, md5_hash.update)
+        logger.debug('Calculated root key hash as: %s', md5_hash.hexdigest())
         return md5_hash.digest()

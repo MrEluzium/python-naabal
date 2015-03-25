@@ -25,13 +25,15 @@
 __all__ = ['decompress', 'compress', 'LZSS']
 
 import struct
+import logging
 
 from naabal.util import StringIO
 from naabal.util.bitio import BitReader, BitWriter
 
+logger = logging.getLogger('naabal.util.lzss')
 
-MOD_WINDOW = lambda value: value & (LZSS.WINDOW_SIZE - 1)
-
+# MOD_WINDOW = lambda value: value & (LZSS.WINDOW_SIZE - 1)
+MOD_WINDOW = lambda value: value % 4096
 
 class LZSS(object):
     INDEX_BIT_COUNT         = 12
@@ -162,6 +164,7 @@ class LZSSTree(object):
         self[root_idx].parent = LZSS.TREE_ROOT
         self[root_idx].larger_child = LZSS.UNUSED
         self[root_idx].smaller_child = LZSS.UNUSED
+        logger.debug('Init LZSS tree of %d elements', len(self._data))
 
     def __repr__(self):
         return repr(self._data)

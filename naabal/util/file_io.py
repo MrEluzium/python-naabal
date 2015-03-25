@@ -24,7 +24,9 @@
 
 import functools
 import os
+import logging
 
+logger = logging.getLogger('naabal.util.file_io')
 
 def only_if_open(orig_func):
     @functools.wraps(orig_func)
@@ -88,7 +90,7 @@ class FileInFile(object):
         self._handle        = parent_handle
         self._writeable     = writeable and ('w' in self._handle.mode)
         if self._writeable:
-            self._mode      = 'wb'
+            self._mode      = self._handle.mode
         else:
             self._mode      = 'rb'
         self._closed        = self._handle.closed
@@ -128,7 +130,7 @@ class FileInFile(object):
         elif mode == os.SEEK_CUR:
             self._position += pos
         elif mode == os.SEEK_END:
-            self._position = size + pos
+            self._position = self._size + pos
         self._position = self._constrain_position(self._position)
 
     @only_if_open

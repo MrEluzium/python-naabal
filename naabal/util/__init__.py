@@ -26,6 +26,7 @@ import zlib
 import datetime
 import time
 import os
+import logging
 
 try:
     # py2
@@ -58,3 +59,25 @@ def timestamp_to_datetime(ts):
 
 def datetime_to_timestamp(dt):
     return int(time.mktime(dt.utctimetuple()))
+
+def pad_null_string(s, size):
+    return s + ('\x00' * (size - len(s)))
+
+def trim_null_string(s):
+    return s.rstrip('\x00')
+
+# NullHandler was added in py2.7
+if hasattr(logging, 'NullHandler'):
+    NullHandler = logging.NullHandler
+else:
+    class NullHandler(logging.Handler):
+        def handle(self, record):
+            pass
+
+        def emit(self, record):
+            pass
+
+        def createLock(self):
+            self.lock = None
+
+LOG_FORMAT = logging.Formatter('[%(asctime)s] %(levelname)8s - %(name)s: %(message)s')
