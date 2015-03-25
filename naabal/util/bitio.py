@@ -94,5 +94,8 @@ class BitReader(BitIO):
 
     def _load_bit_buffer(self):
         c = self._data_buffer.read(1)
-        self._bit_buffer = ord(c)
-        self._bit_idx += 1
+        if c:
+            self._bit_buffer = ord(c)
+            self._bit_idx += 1
+        else:
+            raise IOError('Attempted to read past EOF')
