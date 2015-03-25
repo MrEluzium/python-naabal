@@ -41,7 +41,6 @@ def main():
     args = parser.parse_args()
 
     with big_open(args.filename) as bigfile:
-        bigfile.load()
         if args.include_matching:
             member_list = [m for m in bigfile.get_members() if fnmatch.fnmatch(m.name, args.include_matching)]
         else:

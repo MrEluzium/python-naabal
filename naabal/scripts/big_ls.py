@@ -45,7 +45,6 @@ def main():
     parser.add_argument('filename')
     args = parser.parse_args()
     with big_open(args.filename) as bigfile:
-        bigfile.load()
         for member in bigfile:
             if args.long:
                 sys.stdout.write('{0} {1:8d} +{2:8d} {3} {4}\n'.format(
