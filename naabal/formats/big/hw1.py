@@ -254,27 +254,25 @@ class HomeworldBigFile(BigFile):
 
     def save(self):
         logger.info('Writing bigfile: %r', self)
-        crc_fix = lambda crc_start, crc_end: (crc_start << 32) | crc_end
 
-        sorted_members = sorted(self.get_members(), key=lambda m: \
-            crc_fix(*self._get_filename_crcs(self._denormalize_filename(m.name))))
-        member_count = len(sorted_members)
+        members = self.get_members()
+        member_count = len(members)
         logger.debug('Found %d members to write', member_count)
-        self['header']['toc_entry_count'] = len(sorted_members)
+        self['header']['toc_entry_count'] = len(members)
         self['table_of_contents']._data_list = [self['table_of_contents'].CHILD_TYPE() \
             for i in range(member_count)]
 
-        offset = self['header'].data_size + (len(sorted_members) * self['table_of_contents'].CHILD_TYPE.data_size)
+        offset = self['header'].data_size + (len(members) * self['table_of_contents'].CHILD_TYPE.data_size)
         logger.debug('Preparing to start writing member data at offset: %d', offset)
 
-        max_data_size = sum(len(m.name) + 1 + m.real_size for m in sorted_members)
+        max_data_size = sum(len(m.name) + 1 + m.real_size for m in members)
         max_file_size = offset + max_data_size
         logger.debug('Truncating file to max possible size: %d (%d + %d)',
             max_file_size, offset, max_data_size)
 
         self.truncate(max_file_size)
 
-        for i, member in enumerate(sorted_members):
+        for i, member in enumerate(members):
             crc_head, crc_tail = self._get_filename_crcs(self._denormalize_filename(member.name))
             toc_entry = self['table_of_contents'][i]
             toc_entry['name_crc_start'] = crc_head
@@ -318,6 +316,13 @@ class HomeworldBigFile(BigFile):
         # cut the file off at the end of the data we wrote
         self.truncate(offset)
         logger.debug('Truncating file to last written offset: %d', offset)
+
+        # file data is written sorted by filename, toc content is sorted by the
+        # crc values
+        logger.debug('Sorting ToC entries based on filename CRCs')
+        crc_fix = lambda crc_start, crc_end: (crc_start << 32) | crc_end
+        self['table_of_contents']._data_list.sort(
+            key=lambda e: crc_fix(e['name_crc_start'], e['name_crc_end']))
 
         # write the header + toc
         super(HomeworldBigFile, self).save()
