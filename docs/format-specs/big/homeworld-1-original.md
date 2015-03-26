@@ -10,9 +10,9 @@ archive after first creating it.
 
 The overall format is:
 
-    * Header
-    * Table of Contents (ToC)
-    * File blobs
+* Header
+* Table of Contents (ToC)
+* File blobs
 
 ### Header
 
@@ -21,12 +21,14 @@ The header is a fixed size struct of 15 bytes at the beginning of the file
 
 The contents of a header struct are:
 
-    * `char[3]` (3 bytes) file signature
-    * `char[4]` (4 bytes) format version
-    * `int` (4 bytes) file count
-    * `int` (4 bytes) flags
+* `char[3]` (3 bytes) file signature
+* `char[4]` (4 bytes) format version
+* `int` (4 bytes) file count
+* `int` (4 bytes) flags
 
-The `file signature` should always be "RBF". The only known value for the
+The `file signature` should always be "RBF".
+
+The only known value for the
 `format version` is "1.23". Additionally, the Homeworld source code shows that
 the version is hard-coded as "1.23" so files with a different version would not
 be recogonized as valid.
@@ -46,15 +48,15 @@ a file contained in the archive.
 
 The contents of a ToC entry struct are:
 
-    * `unsigned long` (4 bytes) name crc1
-    * `unsigned long` (4 bytes) name crc2
-    * `unsigned long` (4 bytes) name length
-    * `unsigned long` (4 bytes) stored size
-    * `unsigned long` (4 bytes) real size
-    * `unsigned long` (4 bytes) offset
-    * `unsigned long` (4 bytes) timestamp
-    * `char` (1 byte) compression flag
-    * `unsigned char[3]` (3 bytes) unused padding
+* `unsigned long` (4 bytes) name crc1
+* `unsigned long` (4 bytes) name crc2
+* `unsigned long` (4 bytes) name length
+* `unsigned long` (4 bytes) stored size
+* `unsigned long` (4 bytes) real size
+* `unsigned long` (4 bytes) offset
+* `unsigned long` (4 bytes) timestamp
+* `char` (1 byte) compression flag
+* `unsigned char[3]` (3 bytes) unused padding
 
 The `name crc` fields are the standard CRC32 checksums of the the filename
 (converted to lower-case) split in half. Note that there is actually a bug in the
@@ -102,13 +104,13 @@ the compressed (or not) file contents.
 
 The filename has a couple considerations to be aware of:
 
-    * The filename should have Windows-style path separators, i.e. backslashes (\)
-    * The filename is stored in the original case. This is important as the CRC32
-    values of the filename are calculated based on the lower-case version of the
-    filename, so two filenames that differ only by case would have the same CRC32
-    values and should be avoided.
-    * The filename is also not stored in plaintext, it has a simple XOR encoding
-    method run on it first. See the XOR Encryption section.
+* The filename should have Windows-style path separators, i.e. backslashes (\)
+* The filename is stored in the original case. This is important as the CRC32
+values of the filename are calculated based on the lower-case version of the
+filename, so two filenames that differ only by case would have the same CRC32
+values and should be avoided.
+* The filename is also not stored in plaintext, it has a simple XOR encoding
+method run on it first. See the XOR Encryption section.
 
 ## Additional Notes
 
@@ -134,10 +136,10 @@ This is some code for both the encryption and decryption of a filename in-place:
 The compression scheme used for file data is [LZSS](http://en.wikipedia.org/wiki/Lempel%E2%80%93Ziv%E2%80%93Storer%E2%80%93Szymanski)
 with the following notes:
 
-    * 1 bit signals passthrough character
-    * 0 bit signals back reference
-    * 12 bit index field
-    * 4 bit length field
+* 1 bit signals passthrough character
+* 0 bit signals back reference
+* 12 bit index field
+* 4 bit length field
 
 ### ToC Sorting
 
