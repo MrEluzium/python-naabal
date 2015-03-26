@@ -24,7 +24,7 @@
 
 import zlib
 import datetime
-import time
+import calendar
 import os
 import logging
 
@@ -58,7 +58,7 @@ def timestamp_to_datetime(ts):
     return datetime.datetime.utcfromtimestamp(float(ts))
 
 def datetime_to_timestamp(dt):
-    return int(time.mktime(dt.utctimetuple()))
+    return int(calendar.timegm(dt.utctimetuple()))
 
 def pad_null_string(s, size):
     return s + ('\x00' * (size - len(s)))
