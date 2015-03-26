@@ -109,6 +109,7 @@ class BigFile(StructuredFile):
     def load(self):
         super(BigFile, self).load()
         self._members = self._get_members()
+        self._sort_members()
 
     def check_format(self):
         key, member_type = self.STRUCTURE[0]
@@ -167,9 +168,11 @@ class BigFile(StructuredFile):
     def add_file(self, fileobj):
         self.add(self.get_biginfo(fileobj))
 
-    def add(self, biginfo):
+    def add(self, biginfo, sort_after=True):
         logger.info('Adding member to archive: %r', biginfo)
         self._members.append(biginfo)
+        if sort_after:
+            self._sort_members()
 
     def add_all(self, path='', exclude=None):
         if exclude is None:
@@ -182,9 +185,10 @@ class BigFile(StructuredFile):
                 if not exclude(filename):
                     partial_filename = filename.replace(path, '', 1)
                     logger.info('Adding file as: %s => %s', filename, partial_filename)
-                    self.add(self.get_biginfo(filename, alt_filename=partial_filename))
+                    self.add(self.get_biginfo(filename, alt_filename=partial_filename), False)
                 else:
                     logger.debug('Excluding file: %s', filename)
+        self._sort_members()
 
     def get_biginfo(self, filename, alt_filename=None):
         big_info = ExternalBigInfo(self)
@@ -193,6 +197,9 @@ class BigFile(StructuredFile):
 
     def _get_members(self):
         raise NotImplemented()
+
+    def _sort_members(self):
+        self._members.sort(key=lambda m: m.name)
 
 class BigSection(StructuredFileSection): pass
 class BigSequence(StructuredFileSequence): pass
