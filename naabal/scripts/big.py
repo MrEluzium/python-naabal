@@ -37,14 +37,15 @@ from naabal.formats.big.hwrm import HomeworldRemasteredBigFile, HomeworldClassic
 def big_diff():
     parser = argparse.ArgumentParser(prog='big-diff',
         description='Compare two big files')
-    parser.add_argument('left-file')
-    parser.add_argument('right-file')
+    parser.add_argument('left_file')
+    parser.add_argument('right_file')
     args = parser.parse_args()
 
     with big_load(args.left_file) as left_big:
         with big_load(args.right_file) as right_big:
             if isinstance(left_big, HomeworldBigFile):
                 for i, (left_m, right_m) in enumerate(zip(left_big['table_of_contents'], right_big['table_of_contents'])):
+                    sys.stdout.write('Checking ToC entry #{0:06d}\n'.format(i+1))
                     for struct_m in HomeworldBigFile.STRUCTURE[1][1].CHILD_TYPE.STRUCTURE:
                         key = struct_m['key']
                         left_v = left_m[key]
@@ -54,7 +55,7 @@ def big_diff():
                                 key, repr(left_v), repr(right_v)))
             else:
                 for i, (left_m, right_m) in enumerate(zip(left_big.get_members(), right_big.get_members())):
-                    sys.stdout.write('Checking member #{0:06d}\n'.format(i))
+                    sys.stdout.write('Checking member #{0:06d}\n'.format(i+1))
                     for key in ['name', 'mtime', 'real_size', 'stored_size']:
                         left_v = getattr(left_m, key)
                         right_v = getattr(right_m, key)
