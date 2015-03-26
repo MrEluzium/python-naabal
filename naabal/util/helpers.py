@@ -37,11 +37,11 @@ BIG_FORMATS     = [
     HomeworldBigFile,
 ]
 
-def big_open(filename, mode='rb'):
+def big_load(filename):
     logger.info('Attempting to determine format for big file: %s', filename)
     for big_fmt in BIG_FORMATS:
         logger.debug('Trying format: %s', big_fmt)
-        bigfile = big_fmt(filename, mode)
+        bigfile = big_fmt(filename)
         try:
             bigfile.load()
         except Exception as err:
@@ -52,3 +52,6 @@ def big_open(filename, mode='rb'):
             return bigfile
     else:
         raise ValueError('Unable to determine appropriate .big format')
+
+def big_open(filename, mode='rb'):
+    pass

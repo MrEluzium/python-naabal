@@ -60,10 +60,11 @@ SETUP_ARGS = {
     'packages':         find_packages(),
     'entry_points':     {
         'console_scripts': [
-            'big-ls             = naabal.scripts.big_ls:main',
-            'big-extract        = naabal.scripts.big_extract:main',
-            'big-decrypt        = naabal.scripts.big_decrypt:main',
-            'big-create         = naabal.scripts.big_create:main',
+            'big-ls             = naabal.scripts.big:big_ls',
+            'big-extract        = naabal.scripts.big:big_extract',
+            'big-decrypt        = naabal.scripts.big:big_decrypt',
+            'big-create         = naabal.scripts.big:big_create',
+            'big-diff           = naabal.scripts.big:big_diff',
         ],
     },
     'test_suite':       'tests',
